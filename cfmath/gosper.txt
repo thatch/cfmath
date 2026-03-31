@@ -1,0 +1,23 @@
+  The term comes from Gosper's original 1972 HAKMEM memo (MIT AI Memo 239, items 101–101B). The geometric intuition: a CF tail x' is constrained to
+  [1, ∞) (since it represents a CF with first term ≥ 1). Two inputs x', y' therefore live in the rectangle [1,∞) × [1,∞).                           
+                                                                                                                                                  
+  A bihomographic function (axy + bx + cy + d)/(exy + fx + gy + h) is a rational function that is monotone in each variable separately (no poles in 
+  the domain). A monotone function on a rectangle attains its extremes at the four corners of the rectangle — the four combinations of the endpoint
+  values {1, ∞} for each variable:                                                                                                                  
+                                                                                                                                                  
+       y'=∞       y'=1                                                                                                                              
+  x'=∞  (a/e)     (a+b)/(e+f)
+  x'=1  (a+c)/(e+g)  (a+b+c+d)/(e+f+g+h)                                                                                                            
+                                                                                                                                                    
+  If the floor (integer part) agrees at all four corners, the output is pinned regardless of what the actual tails are.                             
+                                                                                                                                                    
+  References with visual treatment:                                                                                                                 
+  - Gosper's original memo: https://dspace.mit.edu/handle/1721.1/6086 — item 101 has the matrix picture (dense but original)                      
+  - Peter Potts, "Exact Real Arithmetic using Möbius Transformations" (1998 PhD thesis, Imperial College) — Chapter 3 has clear diagrams of the     
+  interval/domain picture                                                                                                                      
+  - Jean Vuillemin, "Exact Real Computer Arithmetic with Continued Fractions" (IEEE Trans. Computers, 1990) — Figure 1 shows the two-input domain   
+  rectangle                                                                                                                                       
+  - David Lester, "Exact Statistics and Continued Fractions" (2006) — more accessible intro with worked examples                                    
+                                                                                                                                                  
+  The Potts thesis is the most diagram-heavy and is freely available online.                                                                        
+
