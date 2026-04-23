@@ -2,17 +2,15 @@
 
 from __future__ import annotations
 
-import math
-from fractions import Fraction
 from typing import Iterator
 
-from .core import CF
 from ._backend import _HAS_MPMATH, _lazy_cf
-
+from .core import CF
 
 # ---------------------------------------------------------------------------
 # Exact constants
 # ---------------------------------------------------------------------------
+
 
 def Phi() -> CF:
     """Golden ratio φ = (1 + sqrt(5))/2 = [1; 1, 1, 1, ...]"""
@@ -41,6 +39,7 @@ def E() -> CF:
 # π and τ
 # ---------------------------------------------------------------------------
 
+
 def _four_over_pi_gen():
     b = 1
     a = 1
@@ -64,9 +63,11 @@ def Tau() -> CF:
 # Euler-Mascheroni constant γ
 # ---------------------------------------------------------------------------
 
+
 def _euler_gamma_terms(n_terms: int) -> list[int]:
     """Compute n_terms CF terms of the Euler-Mascheroni constant γ using mpmath."""
     import mpmath
+
     mpmath.mp.dps = n_terms * 4 + 50
     x = mpmath.euler
     terms: list[int] = []
@@ -89,9 +90,11 @@ def EulerGamma() -> CF:
 # Catalan's constant G
 # ---------------------------------------------------------------------------
 
+
 def _catalan_terms_mpmath(n_terms: int) -> list[int]:
     """Compute n_terms CF terms of Catalan's constant using mpmath."""
     import mpmath
+
     mpmath.mp.dps = n_terms * 4 + 50
     x = mpmath.catalan
     terms: list[int] = []
@@ -158,9 +161,11 @@ def Catalan() -> CF:
 # Apéry's constant ζ(3)
 # ---------------------------------------------------------------------------
 
+
 def _apery_terms_mpmath(n_terms: int) -> list[int]:
     """Compute n_terms CF terms of Apéry's constant ζ(3) using mpmath."""
     import mpmath
+
     mpmath.mp.dps = n_terms * 4 + 50
     x = mpmath.apery
     terms: list[int] = []
@@ -194,7 +199,7 @@ def _apery_terms_from_decimal(n_terms: int) -> list[int]:
         sign = 1
         for k in range(1, N + 1):
             dk = decimal.Decimal(k)
-            term = decimal.Decimal(sign) / (dk ** 3 * binom)
+            term = decimal.Decimal(sign) / (dk**3 * binom)
             val += term
             if abs(term) < eps:
                 break
@@ -228,9 +233,11 @@ def Apery() -> CF:
 # Plastic constant
 # ---------------------------------------------------------------------------
 
+
 def _plastic_terms_mpmath(n_terms: int) -> list[int]:
     """Compute n_terms CF terms of the plastic constant using mpmath."""
     import mpmath
+
     mpmath.mp.dps = n_terms * 4 + 50
     x = mpmath.findroot(lambda z: z**3 - z - 1, mpmath.mpf("1.3"))
     terms: list[int] = []
@@ -253,7 +260,7 @@ def _plastic_terms(n_terms: int) -> list[int]:
     ctx = decimal.Context(prec=prec, rounding=decimal.ROUND_FLOOR)
     with decimal.localcontext(ctx):
         eps = decimal.Decimal(10) ** (-(prec - 5))
-        x = decimal.Decimal(13) / decimal.Decimal(10)   # near ρ ≈ 1.3247
+        x = decimal.Decimal(13) / decimal.Decimal(10)  # near ρ ≈ 1.3247
         while True:
             x2 = x * x
             dx = (x2 * x - x - 1) / (3 * x2 - 1)
@@ -285,9 +292,11 @@ def Plastic() -> CF:
 # Khinchin's constant
 # ---------------------------------------------------------------------------
 
+
 def _khinchin_terms(n_terms: int) -> list[int]:
     """Compute n_terms CF terms of Khinchin's constant K using mpmath."""
     import mpmath
+
     mpmath.mp.dps = n_terms * 4 + 50
     x = mpmath.khinchin
     terms: list[int] = []

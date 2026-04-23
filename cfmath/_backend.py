@@ -15,6 +15,7 @@ from .core import CF
 
 try:
     import mpmath as _mpmath  # noqa: F401 — side-effect: validates import
+
     _HAS_MPMATH = True
 except ImportError:
     _HAS_MPMATH = False

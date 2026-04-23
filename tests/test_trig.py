@@ -5,8 +5,8 @@ from fractions import Fraction
 
 import pytest
 
-from cfmath import Sin, Cos, Tan, convergent
-from cfmath.trig import _sin_terms_mpmath, _cos_terms_mpmath, _tan_terms_mpmath
+from cfmath import Cos, Sin, Tan, convergent
+from cfmath.trig import _cos_terms_mpmath, _sin_terms_mpmath, _tan_terms_mpmath
 
 
 def _gcf_terms(fn, x: Fraction, n: int) -> list[int]:

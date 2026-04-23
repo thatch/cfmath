@@ -5,20 +5,20 @@ try:
 except ImportError:  # pragma: no cover
     __version__ = "dev"
 
-from .core import CF
+from .archyperbolic import Arccosh, Arcsinh, Arctanh
+from .arctrig import Arccos, Arcsin, Arctan
+from .constants import Apery, Catalan, E, EulerGamma, Khinchin, Phi, Pi, Plastic, Tau
 from .convergents import convergent, convergent_pair, convergent_pairs, convergents
-from .gosper import cf_add, cf_sub, cf_mul, cf_div, cf_homographic, cf_min, cf_max
-from .quadratic import Sqrt
-from .constants import Phi, E, Pi, Tau, EulerGamma, Catalan, Apery, Plastic, Khinchin
-from .logarithm import Log2, Ln, Log, Log10
-from .exponential import Exp
-from .power import Pow, Cuberoot
-from .trig import Sin, Cos, Tan
-from .arctrig import Arcsin, Arccos, Arctan
-from .hyperbolic import Sinh, Cosh, Tanh
-from .archyperbolic import Arctanh, Arcsinh, Arccosh
-from .special import Zeta, Gamma
+from .core import CF
 from .debug import CountingIterator, digits_with_debug
+from .exponential import Exp
+from .gosper import cf_add, cf_div, cf_homographic, cf_max, cf_min, cf_mul, cf_sub
+from .hyperbolic import Cosh, Sinh, Tanh
+from .logarithm import Ln, Log, Log2, Log10
+from .power import Cuberoot, Pow
+from .quadratic import Sqrt
+from .special import Gamma, Zeta
+from .trig import Cos, Sin, Tan
 
 __all__ = [
     "CF",

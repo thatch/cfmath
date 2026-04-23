@@ -87,16 +87,19 @@ from __future__ import annotations
 
 import os
 import sys
+from fractions import Fraction
+from typing import Iterator
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from typing import Iterator
-from cfmath import CF
-from cfmath.gosper import _homographic_terms, _bihomographic_terms, _MAX_STALL
 
+from cfmath import CF, Phi, Sqrt
+from cfmath.gosper import _MAX_STALL, _bihomographic_terms, _homographic_terms
 
 # ---------------------------------------------------------------------------
 # Corner sums
 # ---------------------------------------------------------------------------
+
 
 def _corner_sum(coeffs: list[int], C: int) -> int:
     """Sum coefficients at corner C (bitmask of variables that → ∞)."""
@@ -106,6 +109,7 @@ def _corner_sum(coeffs: list[int], C: int) -> int:
 # ---------------------------------------------------------------------------
 # Output check
 # ---------------------------------------------------------------------------
+
 
 def _tri_output(n: list[int], d: list[int]) -> int | None:
     """Return the next CF term if all 8 corners agree on a floor, else None."""
@@ -127,6 +131,7 @@ def _tri_output(n: list[int], d: list[int]) -> int | None:
 # ---------------------------------------------------------------------------
 # Ingest: substitute variable → t + 1/variable'
 # ---------------------------------------------------------------------------
+
 
 def _tri_ingest(n: list[int], d: list[int], B: int, t: int) -> tuple[list[int], list[int]]:
     """Ingest term t from the variable whose bitmask is B (4=w, 2=x, 1=y).
@@ -155,6 +160,7 @@ def _tri_ingest(n: list[int], d: list[int], B: int, t: int) -> tuple[list[int], 
 # Emit: z = q + 1/z'
 # ---------------------------------------------------------------------------
 
+
 def _tri_emit(n: list[int], d: list[int], q: int) -> tuple[list[int], list[int]]:
     new_n = list(d)
     new_d = [n[i] - q * d[i] for i in range(8)]
@@ -164,6 +170,7 @@ def _tri_emit(n: list[int], d: list[int], q: int) -> tuple[list[int], list[int]]
 # ---------------------------------------------------------------------------
 # Exhaustion reduction: fall through to the right lower-dim algorithm
 # ---------------------------------------------------------------------------
+
 
 def _reduce_exhausted(
     n: list[int],
@@ -217,15 +224,23 @@ def _reduce_exhausted(
         # rn mapping: rn[0]=const, rn[1]=first-var, rn[2]=second-var, rn[3]=both
         b0, b1 = remaining
         yield from _bihomographic_terms(
-            iters[b0], iters[b1],
-            rn[3], rn[1], rn[2], rn[0],
-            rd[3], rd[1], rd[2], rd[0],
+            iters[b0],
+            iters[b1],
+            rn[3],
+            rn[1],
+            rn[2],
+            rn[0],
+            rd[3],
+            rd[1],
+            rd[2],
+            rd[0],
         )
 
 
 # ---------------------------------------------------------------------------
 # Main generator
 # ---------------------------------------------------------------------------
+
 
 def _trihomographic_terms(
     w_iter: Iterator[int],
@@ -305,7 +320,9 @@ def _trihomographic_terms(
 
 
 def cf_trihomographic(
-    w: CF, x: CF, y: CF,
+    w: CF,
+    x: CF,
+    y: CF,
     n: list[int],
     d: list[int],
 ) -> CF:
@@ -314,14 +331,22 @@ def cf_trihomographic(
     n and d are each 8 integers indexed by bitmask
     (index 7=wxy, 6=wx, 5=wy, 4=w, 3=xy, 2=x, 1=y, 0=constant).
     """
-    return CF([], _source=_trihomographic_terms(
-        w._iter_from(0), x._iter_from(0), y._iter_from(0), n, d,
-    ))
+    return CF(
+        [],
+        _source=_trihomographic_terms(
+            w._iter_from(0),
+            x._iter_from(0),
+            y._iter_from(0),
+            n,
+            d,
+        ),
+    )
 
 
 # ---------------------------------------------------------------------------
 # Convenience wrappers
 # ---------------------------------------------------------------------------
+
 
 def cf_fma(w: CF, x: CF, y: CF) -> CF:
     """Fused multiply-add: w*x + y.
@@ -329,8 +354,8 @@ def cf_fma(w: CF, x: CF, y: CF) -> CF:
     The wx cross-term and y addend appear in the same trilinear formula.
     """
     #         [1, y, x, xy,  w, wy, wx, wxy]
-    n = [0,   1,  0,  0,  0,  0,  1,  0]
-    d = [1,   0,  0,  0,  0,  0,  0,  0]
+    n = [0, 1, 0, 0, 0, 0, 1, 0]
+    d = [1, 0, 0, 0, 0, 0, 0, 0]
     return cf_trihomographic(w, x, y, n, d)
 
 
@@ -348,8 +373,8 @@ def cf_euler_step(a_prev: CF, a_curr: CF, tail: CF) -> CF:
     denominator depends on all three inputs simultaneously.
     """
     #         [1, y, x,  xy, w, wy, wx, wxy]
-    n = [0,   0,  0,  0,  1,  0,  0,  0]
-    d = [0,   0, -1,  1,  1,  0,  0,  0]
+    n = [0, 0, 0, 0, 1, 0, 0, 0]
+    d = [0, 0, -1, 1, 1, 0, 0, 0]
     return cf_trihomographic(a_prev, a_curr, tail, n, d)
 
 
@@ -357,8 +382,10 @@ def cf_euler_step(a_prev: CF, a_curr: CF, tail: CF) -> CF:
 # Demo
 # ---------------------------------------------------------------------------
 
+
 def _approx(cf: CF, k: int = 10) -> float:
     from cfmath.convergents import convergent
+
     terms = list(cf.take(k + 1))
     if not terms:
         return float("nan")
@@ -385,9 +412,11 @@ r = cf_fma(CF([2]), CF([3]), CF([5]))
 assert list(r.take(2)) == [11], list(r.take(2))
 _show("2*3 + 5 = 11", cf_fma(CF([2]), CF([3]), CF([5])))
 
-from fractions import Fraction
-half = CF.from_fraction(1, 2); third = CF.from_fraction(1, 3); qtr = CF.from_fraction(1, 4)
-expected = Fraction(1,2)*Fraction(1,3) + Fraction(1,4)  # = 5/12
+
+half = CF.from_fraction(1, 2)
+third = CF.from_fraction(1, 3)
+qtr = CF.from_fraction(1, 4)
+expected = Fraction(1, 2) * Fraction(1, 3) + Fraction(1, 4)  # = 5/12
 _show("(1/2)*(1/3) + 1/4 = 5/12", cf_fma(half, third, qtr))
 assert abs(_approx(cf_fma(half, third, qtr)) - float(expected)) < 1e-8
 
@@ -406,15 +435,16 @@ print("  corners ever agreeing on a floor.  This is a known CF arithmetic limit,
 print("  not specific to trihomographic (cf_mul(√2, √2) has the same issue).")
 print()
 
-from cfmath import Sqrt, Phi
-import math
 
 # φ² = φ + 1 ≈ 2.618 (irrational — converges fine)
 _show("φ²  = φ·φ + 0  ≈ 2.618 → [2;1,1,1,…]", cf_fma(Phi(), Phi(), CF.from_fraction(0, 1)))
 assert list(cf_fma(Phi(), Phi(), CF.from_fraction(0, 1)).take(5)) == [2, 1, 1, 1, 1]
 
 # √2 · √5 + 0 = √10 ≈ 3.162 (two distinct surds, irrational)
-_show("√2·√5 + 0 = √10 ≈ 3.162 → [3;6,6,6,…]", cf_fma(Sqrt(2), Sqrt(5), CF.from_fraction(0, 1)))
+_show(
+    "√2·√5 + 0 = √10 ≈ 3.162 → [3;6,6,6,…]",
+    cf_fma(Sqrt(2), Sqrt(5), CF.from_fraction(0, 1)),
+)
 assert list(cf_fma(Sqrt(2), Sqrt(5), CF.from_fraction(0, 1)).take(4)) == [3, 6, 6, 6]
 
 # φ²+φ = 2φ+1 ≈ 4.236 (three copies of φ: w·x + y with w=x=y=φ)
@@ -434,8 +464,8 @@ print()
 # z = (3/2) / (3/2 − 4/3 + (4/3)·2) = (3/2) / (17/6) = 9/17
 a_prev = CF.from_fraction(3, 2)
 a_curr = CF.from_fraction(4, 3)
-tail   = CF([2])
-step   = cf_euler_step(a_prev, a_curr, tail)
+tail = CF([2])
+step = cf_euler_step(a_prev, a_curr, tail)
 _show("euler_step(3/2, 4/3, 2) = 9/17", step)
 assert list(step.take(5)) == [0, 1, 1, 8], list(step.take(5))  # 9/17 = [0;1,1,8]
 

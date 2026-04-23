@@ -49,13 +49,19 @@ class TestExp:
         # 2^(3/2) = Exp(3/2 * Ln(2))
         result = Exp(Fraction(3, 2) * Ln(2))
         val = float(convergent(result.take(20), 19))
-        assert abs(val - 2 ** 1.5) < 1e-8
+        assert abs(val - 2**1.5) < 1e-8
 
 
 class TestDecimalBackend:
     def test_exp_decimal_matches_mpmath(self):
         """Decimal Taylor series for exp agrees with mpmath term-for-term."""
-        for x in (Fraction(1, 4), Fraction(1, 3), Fraction(1, 2), Fraction(1), Fraction(2, 3)):
+        for x in (
+            Fraction(1, 4),
+            Fraction(1, 3),
+            Fraction(1, 2),
+            Fraction(1),
+            Fraction(2, 3),
+        ):
             dec = _exp_terms_from_decimal(x.numerator, x.denominator, 30)
             mpm = _exp_terms_from_mpmath(x.numerator, x.denominator, 30)
             assert dec == mpm, f"exp({x}): decimal vs mpmath mismatch"

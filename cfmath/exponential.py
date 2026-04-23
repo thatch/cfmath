@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from fractions import Fraction
 
+from ._backend import _HAS_MPMATH, _coerce_trig_arg, _lazy_cf
 from .core import CF
-from ._backend import _HAS_MPMATH, _lazy_cf, _coerce_trig_arg
 
 
 def _exp_terms_from_decimal(x_num: int, x_den: int, n_terms: int) -> list[int]:
@@ -45,6 +45,7 @@ def _exp_terms_from_decimal(x_num: int, x_den: int, n_terms: int) -> list[int]:
 def _exp_terms_from_mpmath(x_num: int, x_den: int, n_terms: int) -> list[int]:
     """Compute n_terms CF terms of exp(x_num/x_den) using mpmath."""
     import mpmath
+
     mpmath.mp.dps = n_terms * 4 + 50
     val = mpmath.exp(mpmath.mpf(x_num) / mpmath.mpf(x_den))
     terms: list[int] = []
@@ -71,11 +72,14 @@ def Exp(x) -> CF:
         Exp(Fraction(3, 2) * Ln(2))  # 2^(3/2) ≈ [2; 1, 3, 1, 5, ...]
     """
     if isinstance(x, CF):
+
         def _compute(n_terms: int) -> list[int]:
             import mpmath
+
             dps = n_terms * 4 + 50
             mpmath.mp.dps = dps
             from .convergents import convergent as _convergent
+
             depth = n_terms * 2 + 20
             approx: Fraction = _convergent(x, depth)
             val = mpmath.exp(mpmath.mpf(approx.numerator) / mpmath.mpf(approx.denominator))
@@ -85,6 +89,7 @@ def Exp(x) -> CF:
                 terms.append(a)
                 val = 1 / (val - a)
             return terms
+
         return _lazy_cf(_compute)
 
     x = _coerce_trig_arg(x)

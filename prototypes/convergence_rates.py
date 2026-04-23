@@ -18,18 +18,24 @@ from fractions import Fraction
 from itertools import islice
 
 from cfmath import (
-    CF,
-    digits_with_debug,
-    Pi, E, Phi, Tau, EulerGamma,
+    Cos,
+    E,
+    EulerGamma,
+    Ln,
+    Log2,
+    Phi,
+    Pi,
+    Sin,
     Sqrt,
-    Sin, Cos, Tan,
-    Ln, Log2,
+    Tan,
+    Tau,
+    digits_with_debug,
 )
-
 
 # ---------------------------------------------------------------------------
 # Core measurement
 # ---------------------------------------------------------------------------
+
 
 def cost_profile(cf_factory, n_digits: int = 105) -> list[int]:
     """Return cumulative CF terms consumed after each decimal digit.
@@ -56,29 +62,29 @@ def terms_at(profile: list[int], n: int) -> int | None:
 # ---------------------------------------------------------------------------
 
 TARGETS = [10, 100]
-N_PROFILE = max(TARGETS) + 5   # compute a few extra so we always hit 100
+N_PROFILE = max(TARGETS) + 5  # compute a few extra so we always hit 100
 
 BENCHMARKS: list[tuple[str, object]] = [
     # --- constants ---
-    ("π",           Pi),
-    ("e",           E),
-    ("φ (golden)",  Phi),
-    ("τ = 2π",      Tau),
-    ("√2",          lambda: Sqrt(2)),
-    ("√7",          lambda: Sqrt(7)),
-    ("γ (E-M)",     EulerGamma),
+    ("π", Pi),
+    ("e", E),
+    ("φ (golden)", Phi),
+    ("τ = 2π", Tau),
+    ("√2", lambda: Sqrt(2)),
+    ("√7", lambda: Sqrt(7)),
+    ("γ (E-M)", EulerGamma),
     # --- logarithms ---
-    ("ln 2",        lambda: Ln(2)),
-    ("ln 3",        lambda: Ln(3)),
-    ("log₂ 123",    lambda: Log2(123)),
+    ("ln 2", lambda: Ln(2)),
+    ("ln 3", lambda: Ln(3)),
+    ("log₂ 123", lambda: Log2(123)),
     # --- trig at x = 1/4 ---
-    ("sin(1/4)",    lambda: Sin(Fraction(1, 4))),
-    ("cos(1/4)",    lambda: Cos(Fraction(1, 4))),
-    ("tan(1/4)",    lambda: Tan(Fraction(1, 4))),
+    ("sin(1/4)", lambda: Sin(Fraction(1, 4))),
+    ("cos(1/4)", lambda: Cos(Fraction(1, 4))),
+    ("tan(1/4)", lambda: Tan(Fraction(1, 4))),
     # --- trig at x = 1/2 ---
-    ("sin(1/2)",    lambda: Sin(Fraction(1, 2))),
-    ("cos(1/2)",    lambda: Cos(Fraction(1, 2))),
-    ("tan(1/2)",    lambda: Tan(Fraction(1, 2))),
+    ("sin(1/2)", lambda: Sin(Fraction(1, 2))),
+    ("cos(1/2)", lambda: Cos(Fraction(1, 2))),
+    ("tan(1/2)", lambda: Tan(Fraction(1, 2))),
 ]
 
 
@@ -110,7 +116,7 @@ def print_table(benchmarks, targets, n_profile):
 # ---------------------------------------------------------------------------
 
 DETAIL_FUNCTIONS = [
-    ("π",        Pi),
+    ("π", Pi),
     ("φ (golden)", Phi),
     ("sin(1/4)", lambda: Sin(Fraction(1, 4))),
 ]

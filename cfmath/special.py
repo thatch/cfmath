@@ -4,13 +4,13 @@ from __future__ import annotations
 
 from fractions import Fraction
 
-from .core import CF
 from ._backend import _HAS_MPMATH, _lazy_cf
-
+from .core import CF
 
 # ---------------------------------------------------------------------------
 # Bernoulli numbers
 # ---------------------------------------------------------------------------
+
 
 def _bernoulli(n: int) -> Fraction:
     """Compute the n-th Bernoulli number as an exact Fraction.
@@ -18,6 +18,7 @@ def _bernoulli(n: int) -> Fraction:
     Uses the recurrence (m+1) B_m = -Σ_{k=0}^{m-1} C(m+1,k) B_k.
     """
     from math import comb
+
     B: list[Fraction] = [Fraction(0)] * (n + 1)
     B[0] = Fraction(1)
     for m in range(1, n + 1):
@@ -28,6 +29,7 @@ def _bernoulli(n: int) -> Fraction:
 # ---------------------------------------------------------------------------
 # Riemann zeta function
 # ---------------------------------------------------------------------------
+
 
 def _zeta_odd_terms_from_decimal(s: int, n_terms: int) -> list[int]:
     """Compute CF terms of ζ(s) for odd integer s ≥ 5 via Euler-accelerated η.
@@ -73,6 +75,7 @@ def _zeta_odd_terms_from_decimal(s: int, n_terms: int) -> list[int]:
 def _zeta_odd_terms_mpmath(s: int, n_terms: int) -> list[int]:
     """Compute CF terms of ζ(s) for odd integer s ≥ 5 using mpmath."""
     import mpmath
+
     mpmath.mp.dps = n_terms * 4 + 50
     val = mpmath.zeta(s)
     terms: list[int] = []
@@ -102,14 +105,17 @@ def Zeta(s: int) -> CF:
     if not isinstance(s, int) or s < 2:
         raise ValueError("Zeta requires integer s >= 2")
     from .constants import Apery
+
     if s == 3:
         return Apery()
     if s % 2 == 0:
         n = s // 2
         from math import factorial
+
         B2n = _bernoulli(s)
         coeff = Fraction((-1) ** (n + 1)) * B2n * Fraction(2 ** (2 * n - 1), factorial(2 * n))
         from .constants import Pi
+
         pi = Pi()
         result: CF = CF.from_rational(coeff)
         for _ in range(2 * n):
@@ -125,9 +131,11 @@ def Zeta(s: int) -> CF:
 # Gamma function
 # ---------------------------------------------------------------------------
 
+
 def _gamma_terms_mpmath(x_num: int, x_den: int, n_terms: int) -> list[int]:
     """Compute n_terms CF terms of Γ(x_num/x_den) using mpmath."""
     import mpmath
+
     mpmath.mp.dps = n_terms * 4 + 50
     val = mpmath.gamma(mpmath.mpf(x_num) / mpmath.mpf(x_den))
     terms: list[int] = []
@@ -160,6 +168,7 @@ def Gamma(x) -> CF:
         Gamma(Fraction(3, 2))    # ≈ [0; 1, 4, 1, 1, 1, ...]  (√π/2)
     """
     import math as _math
+
     if isinstance(x, int):
         x = Fraction(x)
     elif not isinstance(x, Fraction):

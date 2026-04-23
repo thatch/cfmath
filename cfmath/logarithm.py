@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from fractions import Fraction
 
-from .core import CF
 from ._backend import _HAS_MPMATH, _lazy_cf
+from .core import CF
 
 
 def _ln_terms_from_decimal(x_num: int, x_den: int, n_terms: int) -> list[int]:
@@ -65,6 +65,7 @@ def _ln_terms_from_decimal(x_num: int, x_den: int, n_terms: int) -> list[int]:
 def _ln_terms_from_mpmath(x_num: int, x_den: int, n_terms: int) -> list[int]:
     """Compute n_terms CF terms of ln(x_num/x_den) using mpmath."""
     import mpmath
+
     mpmath.mp.dps = n_terms * 5 + 80
     val = mpmath.log(mpmath.mpf(x_num) / mpmath.mpf(x_den))
     terms: list[int] = []

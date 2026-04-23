@@ -24,6 +24,7 @@ if TYPE_CHECKING:
 # Sqrt
 # ---------------------------------------------------------------------------
 
+
 def Sqrt(n: int) -> "CF":
     """Return the exact CF for sqrt(n).
 
@@ -58,6 +59,7 @@ def Sqrt(n: int) -> "CF":
 # Minimal polynomial helpers
 # ---------------------------------------------------------------------------
 
+
 def _minimal_poly(x: "CF") -> "tuple[int, int, int] | None":
     """Return (A, B, C) such that A·x² + B·x + C = 0 for periodic CF x.
 
@@ -77,11 +79,11 @@ def _minimal_poly(x: "CF") -> "tuple[int, int, int] | None":
     if not x.is_periodic():
         return None
 
-    p, q, r, s = 1, 0, 0, 1   # identity
+    p, q, r, s = 1, 0, 0, 1  # identity
     for a in x.repeating:
         p, q, r, s = p * a + q, p, r * a + s, r
 
-    A, B, C = r, s - p, -q    # quadratic for periodic tail τ
+    A, B, C = r, s - p, -q  # quadratic for periodic tail τ
     for a in reversed(x.terms):
         A, B, C = C, B - 2 * C * a, A - B * a + C * a * a
 
@@ -115,7 +117,6 @@ def _cf_from_poly(A: int, B: int, C: int) -> "CF | None":
     Algorithm: write x=(P+√D)/Q, run the standard period-finding loop, detect
     the cycle by recording seen states (P,Q).
     """
-    from math import gcd
     from .core import CF as _CF
 
     D = B * B - 4 * A * C
@@ -123,7 +124,7 @@ def _cf_from_poly(A: int, B: int, C: int) -> "CF | None":
         return None
 
     s = math.isqrt(D)
-    if s * s == D:                          # rational result
+    if s * s == D:  # rational result
         for num in (-B + s, -B - s):
             if (num > 0) == (2 * A > 0):
                 return _CF.from_fraction(num, 2 * A)
@@ -178,6 +179,7 @@ def _cf_from_poly(A: int, B: int, C: int) -> "CF | None":
 # ---------------------------------------------------------------------------
 # Periodic CF squaring and multiplication
 # ---------------------------------------------------------------------------
+
 
 def _periodic_square(x: "CF") -> "CF | None":
     """Return x² for a periodic CF x, using the equation that x satisfies.
@@ -264,6 +266,7 @@ def _periodic_square(x: "CF") -> "CF | None":
     # If Ax²+Bx+C=0 and z=x², substitute x=(-Az-C)/B (or use the B=0 shortcut).
     # Result: A²z² + (2AC−B²)z + C² = 0.
     from math import gcd
+
     A2, B2, C2 = A * A, 2 * A * C - B * B, C * C
     g = gcd(gcd(abs(A2), abs(B2)), abs(C2))
     return _cf_from_poly(A2 // g, B2 // g, C2 // g)
@@ -327,6 +330,7 @@ def _periodic_mul(x: "CF", y: "CF") -> "CF | None":
       Result = 252/36 = 7  ✓
     """
     from math import gcd
+
     from .core import CF as _CF
 
     poly_x = _minimal_poly(x)

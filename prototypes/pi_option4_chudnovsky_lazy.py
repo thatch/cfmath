@@ -37,16 +37,16 @@ from typing import Iterator
 
 sys.path.insert(0, "/home/claude/cfmath/src")
 
-from cfmath.core import CF
 from cfmath.constants import Sqrt
 from cfmath.convergents import convergent
+from cfmath.core import CF
 
 # ---------------------------------------------------------------------------
 # Chudnovsky constants
 # ---------------------------------------------------------------------------
 
 _C = 640320
-_C3_OVER_24 = _C ** 3 // 24   # = 10939058860032000
+_C3_OVER_24 = _C**3 // 24  # = 10939058860032000
 _A = 13591409
 _B = 545140134
 
@@ -54,6 +54,7 @@ _B = 545140134
 # ---------------------------------------------------------------------------
 # Core generator
 # ---------------------------------------------------------------------------
+
 
 def _lazy_pi_terms() -> Iterator[int]:
     """Yield CF terms of π one at a time, consuming Chudnovsky terms on demand."""
@@ -64,13 +65,13 @@ def _lazy_pi_terms() -> Iterator[int]:
     # attach the next term without recomputing from scratch).
     P_acc = 1
     Q_acc = 1
-    T_acc = _A   # k=0: P=1, Q=1, T=A (the first Chudnovsky term)
+    T_acc = _A  # k=0: P=1, Q=1, T=A (the first Chudnovsky term)
 
     def _add_chudnovsky_term(k: int) -> None:
         """Attach the k-th Chudnovsky term (k ≥ 1) to the running totals."""
         nonlocal P_acc, Q_acc, T_acc
         Pk = (6 * k - 5) * (2 * k - 1) * (6 * k - 1)
-        Qk = k ** 3 * _C3_OVER_24
+        Qk = k**3 * _C3_OVER_24
         sign = 1 if k % 2 == 0 else -1
         Tk = sign * Pk * (_A + _B * k)
         # Binary-split merge: attach [k,k+1) to accumulated [0,k)
@@ -113,12 +114,12 @@ def _lazy_pi_terms() -> Iterator[int]:
     ma, mb, mc, md = 1, 0, 0, 1
 
     # --- Seed: need two consecutive partial sums to bracket π/√C ---
-    r_prev = _rational_part()     # after k=0 term
+    r_prev = _rational_part()  # after k=0 term
     _add_chudnovsky_term(1)
-    r_curr = _rational_part()     # after k=0 and k=1
+    r_curr = _rational_part()  # after k=0 and k=1
     k_next = 2
 
-    sqrt_depth = 3   # start with convergent pair (2, 3); already very tight
+    sqrt_depth = 3  # start with convergent pair (2, 3); already very tight
 
     # ---------------------------------------------------------------------------
     # Main loop: emit CF terms until interval too wide, then add precision
@@ -151,7 +152,7 @@ def _lazy_pi_terms() -> Iterator[int]:
                 # new_output = 1/(output - n)
                 #            = (mc·π + md) / ((ma − n·mc)·π + (mb − n·md))
                 ma, mb, mc, md = mc, md, ma - n * mc, mb - n * md
-                continue   # try to emit another digit before adding more terms
+                continue  # try to emit another digit before adding more terms
 
         # Interval still too wide — consume one more Chudnovsky term.
         _add_chudnovsky_term(k_next)
@@ -169,6 +170,7 @@ def _lazy_pi_terms() -> Iterator[int]:
 # ---------------------------------------------------------------------------
 # Public CF constructor
 # ---------------------------------------------------------------------------
+
 
 def Pi_lazy() -> CF:
     """Return π as a CF, computed lazily via incremental Chudnovsky.
@@ -198,7 +200,7 @@ if __name__ == "__main__":
     first_15 = list(pi.take(15))
     print(f"First 15 CF terms: {first_15}")
     print(f"Expected:          {EXPECTED_FIRST_15}")
-    match = (first_15 == EXPECTED_FIRST_15)
+    match = first_15 == EXPECTED_FIRST_15
     print(f"Match: {match}")
     assert match, f"Terms mismatch!\n  got:      {first_15}\n  expected: {EXPECTED_FIRST_15}"
 

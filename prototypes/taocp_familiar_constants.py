@@ -7,13 +7,15 @@ Knuth's table demonstrates that well-known constants fall into three families:
 
 Run:  python prototypes/taocp_familiar_constants.py
 """
+
 from __future__ import annotations
 
-import sys
 import os
+import sys
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from mpmath import mp, mpf, e, pi, phi, sqrt, log, euler, floor
+from mpmath import e, euler, floor, log, mp, mpf, phi, pi, sqrt
 
 mp.dps = 120  # enough headroom for 20 CF terms
 
@@ -33,16 +35,16 @@ def cf_of(x, n: int = 20) -> list[int]:
 
 
 CONSTANTS: list[tuple[str, object]] = [
-    ("φ  = [1; 1, 1, 1, ...]",            phi),
-    ("√2 = [1; 2, 2, 2, ...]",            sqrt(2)),
-    ("√3 = [1; 1, 2, 1, 2, ...]",         sqrt(3)),
-    ("√5 = [2; 4, 4, 4, ...]",            sqrt(5)),
+    ("φ  = [1; 1, 1, 1, ...]", phi),
+    ("√2 = [1; 2, 2, 2, ...]", sqrt(2)),
+    ("√3 = [1; 1, 2, 1, 2, ...]", sqrt(3)),
+    ("√5 = [2; 4, 4, 4, ...]", sqrt(5)),
     ("e  = [2; 1, 2, 1, 1, 4, 1, 1, 6, ...]", e),
-    ("π  = [3; 7, 15, 1, 292, ...]",      pi),
-    ("ln 2",                              log(2)),
-    ("ln 10",                             log(10)),
-    ("γ  (Euler-Mascheroni)",             euler),
-    ("log₁₀ e  = 1/ln 10",               log(e, 10)),
+    ("π  = [3; 7, 15, 1, 292, ...]", pi),
+    ("ln 2", log(2)),
+    ("ln 10", log(10)),
+    ("γ  (Euler-Mascheroni)", euler),
+    ("log₁₀ e  = 1/ln 10", log(e, 10)),
 ]
 
 print(f"{'Constant':<38}  CF (first 20 partial quotients)")

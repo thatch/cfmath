@@ -3,12 +3,10 @@
 from datetime import timedelta
 from fractions import Fraction
 
-import pytest
-from hypothesis import assume, given, settings
+from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from cfmath import CF, convergent, convergent_pairs, convergents
-
+from cfmath import CF, convergent_pairs, convergents
 
 # ---------------------------------------------------------------------------
 # Strategy helpers
@@ -40,6 +38,7 @@ def _last_convergent(cf: CF, max_terms: int = 60) -> Fraction:
 # Roundtrip: Fraction → CF → Fraction
 # ---------------------------------------------------------------------------
 
+
 class TestRoundtrip:
     @given(_fracs)
     @settings(deadline=timedelta(milliseconds=200))
@@ -65,6 +64,7 @@ class TestRoundtrip:
 # Arithmetic matches Fraction arithmetic
 # Uses to_fraction() since rational+rational=rational (CF is finite)
 # ---------------------------------------------------------------------------
+
 
 class TestArithmeticCorrectness:
     @given(_fracs, _fracs)
@@ -106,6 +106,7 @@ class TestArithmeticCorrectness:
 # Determinant identity: p_n * q_{n-1} - p_{n-1} * q_n = (-1)^(n-1)
 # ---------------------------------------------------------------------------
 
+
 class TestDeterminantIdentity:
     @given(st.lists(st.integers(min_value=1, max_value=20), min_size=2, max_size=10))
     @settings(deadline=timedelta(milliseconds=200))
@@ -124,6 +125,7 @@ class TestDeterminantIdentity:
 # Best-approximation bound: |p_n/q_n - x| ≤ 1/q_n^2
 # ---------------------------------------------------------------------------
 
+
 class TestBestApproximationBound:
     @given(
         st.fractions(min_value=Fraction(1, 10), max_value=Fraction(10)),
@@ -139,14 +141,13 @@ class TestBestApproximationBound:
         p, q = c.numerator, c.denominator
         err = abs(c - f)
         if q > 0:
-            assert err <= Fraction(1, q * q), (
-                f"Bound 1/q² violated: |{p}/{q} - {f}| = {err} >= 1/{q}²"
-            )
+            assert err <= Fraction(1, q * q), f"Bound 1/q² violated: |{p}/{q} - {f}| = {err} >= 1/{q}²"
 
 
 # ---------------------------------------------------------------------------
 # CF constructed from list equals CF from Fraction
 # ---------------------------------------------------------------------------
+
 
 class TestCFConstruction:
     @given(_fracs)
@@ -177,6 +178,7 @@ class TestCFConstruction:
 # Negation: cf + (-cf) == 0
 # ---------------------------------------------------------------------------
 
+
 class TestNegation:
     @given(_fracs)
     @settings(deadline=timedelta(milliseconds=200))
@@ -189,6 +191,7 @@ class TestNegation:
 # ---------------------------------------------------------------------------
 # Commutativity
 # ---------------------------------------------------------------------------
+
 
 class TestAlgebraicLaws:
     @given(_fracs, _fracs)

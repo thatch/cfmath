@@ -18,20 +18,21 @@ approach can struggle to produce the larger CF terms of π (e.g. 292).
 
 from __future__ import annotations
 
-import sys
 import os
+import sys
 
 # Ensure the library is importable when run from repo root
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from fractions import Fraction
-from cfmath.core import CF
-from cfmath.convergents import convergent
 
+from cfmath.convergents import convergent
+from cfmath.core import CF
 
 # ---------------------------------------------------------------------------
 # Pair generators
 # ---------------------------------------------------------------------------
+
 
 def _brouncker_pairs(counter: list[int]):
     """Yield (b_n, a_{n+1}) pairs for Brouncker's π formula.
@@ -57,6 +58,7 @@ def _brouncker_pairs(counter: list[int]):
 # Main constructor
 # ---------------------------------------------------------------------------
 
+
 def Pi_brouncker() -> tuple[CF, list[int]]:
     """Return (CF for π, pair_counter) using Brouncker's generalized CF.
 
@@ -72,7 +74,7 @@ def Pi_brouncker() -> tuple[CF, list[int]]:
 # __main__
 # ---------------------------------------------------------------------------
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     EXPECTED_TERMS = [3, 7, 15, 1, 292, 1, 1, 1, 2, 1, 3, 1, 14, 2, 1]
     N_TERMS = 15
     STALL_LIMIT = 100  # from_generalized_cf raises after this many dry pairs
@@ -136,38 +138,16 @@ if __name__ == '__main__':
 
     # ---- Convergence commentary ----
     print("Convergence rate:")
-    print(
-        "  Brouncker's GCF has numerators 1², 3², 5², ... growing as O(n²)."
-    )
-    print(
-        "  The Möbius transform state must integrate many levels before the"
-    )
-    print(
-        "  fractional output is pinned to a single integer floor — especially"
-    )
-    print(
-        "  near large CF terms like 292 (the 5th term of π) where the tail"
-    )
-    print(
-        "  must be known very precisely before that digit can be confirmed."
-    )
-    print(
-        "  Convergence is therefore very slow: O(n²) pairs per output term,"
-    )
-    print(
-        "  and the built-in stall guard (100 dry pairs) may trigger before"
-    )
-    print(
-        "  large terms like 292 can be emitted."
-    )
+    print("  Brouncker's GCF has numerators 1², 3², 5², ... growing as O(n²).")
+    print("  The Möbius transform state must integrate many levels before the")
+    print("  fractional output is pinned to a single integer floor — especially")
+    print("  near large CF terms like 292 (the 5th term of π) where the tail")
+    print("  must be known very precisely before that digit can be confirmed.")
+    print("  Convergence is therefore very slow: O(n²) pairs per output term,")
+    print("  and the built-in stall guard (100 dry pairs) may trigger before")
+    print("  large terms like 292 can be emitted.")
     if stalled_after is not None:
         print()
-        print(
-            f"  In this run it stalled after {stalled_after} terms / {pairs_consumed} pairs."
-        )
-        print(
-            "  This is expected behaviour for Brouncker's series applied via"
-        )
-        print(
-            "  the Gosper-style generalized-CF algorithm without augmentation."
-        )
+        print(f"  In this run it stalled after {stalled_after} terms / {pairs_consumed} pairs.")
+        print("  This is expected behaviour for Brouncker's series applied via")
+        print("  the Gosper-style generalized-CF algorithm without augmentation.")

@@ -10,18 +10,20 @@ Run:  python prototypes/hakmem101b_examples.py
 
 from __future__ import annotations
 
-import sys
 import os
+import sys
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from fractions import Fraction
-from cfmath import CF, E, Pi, Sqrt, Exp, Ln, cf_homographic
-from cfmath.convergents import convergent
 
+from cfmath import CF, E, Exp, Ln, Pi, Sqrt, cf_homographic
+from cfmath.convergents import convergent
 
 # ---------------------------------------------------------------------------
 # Formatting helpers
 # ---------------------------------------------------------------------------
+
 
 def _cf_terms(cf: CF, n: int = 14) -> list[int]:
     return list(cf.take(n))
@@ -91,9 +93,9 @@ print()
 
 # 2^(3/2) = √8 — should match Sqrt(8)'s CF exactly
 r = Fraction(3, 2)
-pow_cf   = Exp(r * Ln(2))
+pow_cf = Exp(r * Ln(2))
 sqrt8_cf = Sqrt(8)
-terms_pow   = _cf_terms(pow_cf,   10)
+terms_pow = _cf_terms(pow_cf, 10)
 terms_sqrt8 = _cf_terms(sqrt8_cf, 10)
 print(f"  2^(3/2) via Exp(3/2·Ln(2)):  {terms_pow}")
 print(f"  Sqrt(8):                      {terms_sqrt8}")

@@ -121,6 +121,7 @@ class CF:
         appears in the standard CF algorithm — it strips the leading integer a
         and takes the reciprocal of the fractional remainder.
         """
+
         def _gen():
             it = iter(digits)
             try:
@@ -133,7 +134,7 @@ class CF:
             p, q, r, s = Fraction(1), Fraction(0), Fraction(0), Fraction(1)
 
             y_lo = Fraction(d0)
-            step = Fraction(1)          # width of the y-interval; starts at 1
+            step = Fraction(1)  # width of the y-interval; starts at 1
 
             def emit_while_pinned():
                 """Emit CF terms as long as the x-interval pins a single floor."""
@@ -145,9 +146,9 @@ class CF:
                     den_lo = r * y_lo + s
                     den_hi = r * (y_lo + step) + s
                     if den_lo == 0 or den_hi == 0:
-                        break           # endpoint is a pole; need more digits
+                        break  # endpoint is a pole; need more digits
                     if (den_lo > 0) != (den_hi > 0):
-                        break           # pole strictly inside; need more digits
+                        break  # pole strictly inside; need more digits
 
                     xv_lo = (p * y_lo + q) / den_lo
                     xv_hi = (p * (y_lo + step) + q) / den_hi
@@ -158,13 +159,9 @@ class CF:
                     a = math.floor(xv_lo)
                     # The upper bound is open (x < xv_hi), so its effective floor is
                     # floor(xv_hi) when xv_hi is not an integer, else xv_hi − 1.
-                    hi_floor = (
-                        math.floor(xv_hi)
-                        if xv_hi != math.floor(xv_hi)
-                        else math.floor(xv_hi) - 1
-                    )
+                    hi_floor = math.floor(xv_hi) if xv_hi != math.floor(xv_hi) else math.floor(xv_hi) - 1
                     if a != hi_floor:
-                        break           # interval straddles an integer; need more
+                        break  # interval straddles an integer; need more
 
                     yield a
                     # Strip term a from the state: x = a + 1/x' implies the new
@@ -182,7 +179,7 @@ class CF:
             # then extract its CF terms via the standard Euclidean algorithm.
             den = r * y_lo + s
             if den == 0:
-                return          # pole at y_lo means the CF terminates here
+                return  # pole at y_lo means the CF terminates here
             x = (p * y_lo + q) / den
             while True:
                 a = math.floor(x)
@@ -250,7 +247,7 @@ class CF:
         Same state, same corner check, different residual operation.
         """
         a, b, c, d = 1, 0, 0, 1
-        scale = 1   # 1 for the integer part, then `base` for each fractional digit
+        scale = 1  # 1 for the integer part, then `base` for each fractional digit
 
         for index, term in enumerate(self._iter_from(0)):
             if index > 0 and term < 1:
@@ -299,10 +296,7 @@ class CF:
     def to_fraction(self) -> Fraction:
         """Return the exact rational value. Only valid for finite CFs."""
         if not self.is_finite():
-            raise ValueError(
-                "to_fraction() only works for finite CFs; "
-                "use convergent() for periodic/infinite ones"
-            )
+            raise ValueError("to_fraction() only works for finite CFs; use convergent() for periodic/infinite ones")
         result = Fraction(0)
         # Walk backwards through the cache (finite, so drain first)
         terms = list(self._iter_from(0))
@@ -315,6 +309,7 @@ class CF:
 
     def __float__(self) -> float:
         from .convergents import convergent
+
         # Use a deep convergent for a good float approximation
         c = convergent(self.take(40), 39 if self.take(40) else 0)
         return float(c)
@@ -353,6 +348,7 @@ class CF:
         if not self.is_finite():
             raise ValueError("err_estimate is only defined for finite CFs (use .take(n) first)")
         from .convergents import convergent_pairs as _pairs
+
         pairs = list(_pairs(self))
         if not pairs:
             raise ValueError("empty CF")
@@ -366,7 +362,7 @@ class CF:
     # Representation
     # ------------------------------------------------------------------
 
-    _REPR_DIGITS = 10   # decimal digits shown in repr approximation
+    _REPR_DIGITS = 10  # decimal digits shown in repr approximation
 
     def __repr__(self) -> str:
         # Peek at cached terms (includes lazily-computed ones already seen)
@@ -400,12 +396,13 @@ class CF:
         # Append decimal approximation; "=" for exact terminating, "≈" otherwise.
         # Request one extra digit beyond _REPR_DIGITS to detect whether it truncates.
         from itertools import islice as _islice
+
         raw = list(_islice(self.digits(10), self._REPR_DIGITS + 2))
         if not raw:
             return cf_str
         int_part = raw[0]
-        frac = raw[1 : self._REPR_DIGITS + 1]          # at most _REPR_DIGITS fractional digits
-        truncated = len(raw) > self._REPR_DIGITS + 1   # generator had more to give
+        frac = raw[1 : self._REPR_DIGITS + 1]  # at most _REPR_DIGITS fractional digits
+        truncated = len(raw) > self._REPR_DIGITS + 1  # generator had more to give
         dec_str = str(int_part) + ("." + "".join(str(d) for d in frac) if frac else "")
         sym = "≈" if (not finite or truncated) else "="
         return f"{cf_str} {sym} {dec_str}"
@@ -472,7 +469,7 @@ class CF:
             av = next(xi, None)
             bv = next(yi, None)
             if av is None and bv is None:
-                return False              # equal
+                return False  # equal
             if av is None:
                 # self terminates; virtual +∞ at position k
                 # even k: +∞ > bv → self > other → not less-than
@@ -523,6 +520,7 @@ class CF:
         if other is NotImplemented:
             return NotImplemented
         from .gosper import cf_add
+
         return cf_add(self, other)
 
     def __sub__(self, other) -> CF:
@@ -530,6 +528,7 @@ class CF:
         if other is NotImplemented:
             return NotImplemented
         from .gosper import cf_sub
+
         return cf_sub(self, other)
 
     def __mul__(self, other) -> CF:
@@ -537,6 +536,7 @@ class CF:
         if other is NotImplemented:
             return NotImplemented
         from .gosper import cf_mul
+
         return cf_mul(self, other)
 
     def __truediv__(self, other) -> CF:
@@ -544,10 +544,12 @@ class CF:
         if other is NotImplemented:
             return NotImplemented
         from .gosper import cf_div
+
         return cf_div(self, other)
 
     def __neg__(self) -> CF:
         from .gosper import cf_homographic
+
         return cf_homographic(self, -1, 0, 0, 1)
 
     def __pow__(self, n: int) -> CF:
@@ -584,6 +586,7 @@ class CF:
     def reciprocal(self) -> CF:
         """Return 1/self via the Gosper homographic transform (0x+1)/(1x+0)."""
         from .gosper import cf_homographic
+
         return cf_homographic(self, 0, 1, 1, 0)
 
     def normalize(self) -> CF:
@@ -595,6 +598,7 @@ class CF:
         at a time and absorbs any irregularities.
         """
         from .gosper import cf_homographic
+
         return cf_homographic(self, 1, 0, 0, 1)
 
     @classmethod
@@ -665,8 +669,10 @@ class CF:
                 a_next = _Frac(a_next)
                 # Compose state with new Möbius transform [[b_n, a_next],[1,0]]
                 a, b, c, d = (
-                    a * b_n + b, a * a_next,
-                    c * b_n + d, c * a_next,
+                    a * b_n + b,
+                    a * a_next,
+                    c * b_n + d,
+                    c * a_next,
                 )
                 n_emitted = 0
                 for term in _try_emit():
@@ -676,8 +682,7 @@ class CF:
                     stall += 1
                     if stall >= _GCF_STALL_LIMIT:
                         raise ValueError(
-                            f"from_generalized_cf stalled: no term emitted after "
-                            f"consuming {_GCF_STALL_LIMIT} consecutive pairs"
+                            f"from_generalized_cf stalled: no term emitted after consuming {_GCF_STALL_LIMIT} consecutive pairs"
                         )
                 else:
                     stall = 0

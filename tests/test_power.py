@@ -1,11 +1,10 @@
 """Tests for power and cube-root functions."""
 
-import math
 from fractions import Fraction
 
 import pytest
 
-from cfmath import CF, Sqrt, Pow, Cuberoot, convergent, convergents
+from cfmath import CF, Cuberoot, Pow, Sqrt, convergent, convergents
 from cfmath.power import _cbrt_terms_from_decimal, _cbrt_terms_from_mpmath
 
 
@@ -60,7 +59,7 @@ class TestPow:
         result = Pow(Fraction(9, 2), Fraction(3, 2))
         assert result.is_periodic()
         val = float(convergent(result.take(20), 19))
-        assert abs(val - (4.5 ** 1.5)) < 1e-10
+        assert abs(val - (4.5**1.5)) < 1e-10
 
     def test_pow_third_dispatches_to_cuberoot(self):
         assert Pow(8, Fraction(1, 3)).terms == [2]
@@ -70,7 +69,7 @@ class TestPow:
 
     def test_pow_general_fractional(self):
         val = float(convergent(Pow(2, Fraction(3, 2)).take(20), 19))
-        assert abs(val - 2 ** 1.5) < 1e-8
+        assert abs(val - 2**1.5) < 1e-8
 
     def test_pow_bad_type_base(self):
         with pytest.raises(TypeError):

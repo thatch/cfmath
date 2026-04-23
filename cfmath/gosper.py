@@ -48,7 +48,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Iterator
 
-from .quadratic import _periodic_square, _periodic_mul
+from .quadratic import _periodic_mul, _periodic_square
 
 if TYPE_CHECKING:
     from .core import CF
@@ -60,6 +60,7 @@ _MAX_STALL = 1000  # max input terms consumed per output term before giving up
 # ---------------------------------------------------------------------------
 # Helper: correct floor-based output check
 # ---------------------------------------------------------------------------
+
 
 def _homo_output(a: int, b: int, c: int, d: int) -> int | None:
     """Return the next output CF term for (ax'+b)/(cx'+d) with x' ∈ [1,∞), or None.
@@ -75,14 +76,20 @@ def _homo_output(a: int, b: int, c: int, d: int) -> int | None:
     # Pole check: denominators must have the same sign
     if (den_inf > 0) != (den_one > 0):
         return None
-    q_inf = a // c          # floor(a/c) — Python // is floor division
+    q_inf = a // c  # floor(a/c) — Python // is floor division
     q_one = (a + b) // (c + d)
     return q_inf if q_inf == q_one else None
 
 
 def _bi_output(
-    a: int, b: int, c: int, d: int,
-    e: int, f: int, g: int, h: int,
+    a: int,
+    b: int,
+    c: int,
+    d: int,
+    e: int,
+    f: int,
+    g: int,
+    h: int,
 ) -> int | None:
     """Return the next output CF term for the bihomographic (two-input) formula, or None.
 
@@ -94,9 +101,9 @@ def _bi_output(
              (1,∞) → (a+c)/(e+g); (1,1) → (a+b+c+d)/(e+f+g+h).
     """
     corners = [
-        (a,             e),
-        (a + b,         e + f),
-        (a + c,         e + g),
+        (a, e),
+        (a + b, e + f),
+        (a + c, e + g),
         (a + b + c + d, e + f + g + h),
     ]
     signs = set()
@@ -117,10 +124,13 @@ def _bi_output(
 # Unary: y = (ax + b) / (cx + d)
 # ---------------------------------------------------------------------------
 
+
 def _homographic_terms(
     x_iter: Iterator[int],
-    a: int, b: int,
-    c: int, d: int,
+    a: int,
+    b: int,
+    c: int,
+    d: int,
 ) -> Iterator[int]:
     """Yield CF terms of (ax+b)/(cx+d) given the CF terms of x, one at a time."""
 
@@ -141,6 +151,7 @@ def _homographic_terms(
             if c == 0:
                 return
             from .core import CF as _CF
+
             yield from _CF.from_fraction(a, c)
             return
 
@@ -166,6 +177,7 @@ def cf_homographic(x: CF, a: int, b: int, c: int, d: int) -> CF:
     any rational scaling, all computed exactly without converting to decimals.
     """
     from .core import CF as _CF
+
     return _CF([], _source=_homographic_terms(x._iter_from(0), a, b, c, d))
 
 
@@ -181,11 +193,18 @@ def cf_homographic(x: CF, a: int, b: int, c: int, d: int) -> CF:
 #   new_a = a*t+b,  new_b = a,  new_c = c*t+d,  new_d = c
 #   new_e = e*t+f,  new_f = e,  new_g = g*t+h,  new_h = g
 
+
 def _bihomographic_terms(
     x_iter: Iterator[int],
     y_iter: Iterator[int],
-    a: int, b: int, c: int, d: int,
-    e: int, f: int, g: int, h: int,
+    a: int,
+    b: int,
+    c: int,
+    d: int,
+    e: int,
+    f: int,
+    g: int,
+    h: int,
 ) -> Iterator[int]:
 
     x_done = False
@@ -209,8 +228,14 @@ def _bihomographic_terms(
             yield n
             stall = 0
             a, b, c, d, e, f, g, h = (
-                e, f, g, h,
-                a - n * e, b - n * f, c - n * g, d - n * h,
+                e,
+                f,
+                g,
+                h,
+                a - n * e,
+                b - n * f,
+                c - n * g,
+                d - n * h,
             )
             continue
 
@@ -218,6 +243,7 @@ def _bihomographic_terms(
             # Both tails → ∞; value is a/e
             if e != 0:
                 from .core import CF as _CF
+
                 yield from _CF.from_fraction(a, e)
             return
 
@@ -238,8 +264,14 @@ def _bihomographic_terms(
                 t = next(x_iter)
                 x_started = True
                 a, b, c, d, e, f, g, h = (
-                    a * t + c, b * t + d, a, b,
-                    e * t + g, f * t + h, e, f,
+                    a * t + c,
+                    b * t + d,
+                    a,
+                    b,
+                    e * t + g,
+                    f * t + h,
+                    e,
+                    f,
                 )
             except StopIteration:
                 x_done = True
@@ -251,8 +283,14 @@ def _bihomographic_terms(
                 t = next(y_iter)
                 y_started = True
                 a, b, c, d, e, f, g, h = (
-                    a * t + b, a, c * t + d, c,
-                    e * t + f, e, g * t + h, g,
+                    a * t + b,
+                    a,
+                    c * t + d,
+                    c,
+                    e * t + f,
+                    e,
+                    g * t + h,
+                    g,
                 )
             except StopIteration:
                 y_done = True
@@ -269,9 +307,9 @@ def _bihomographic_terms(
             # within ~10^-209 of the boundary (sound for all practical use).
             # Emit it and terminate; there is nothing left after an exact integer.
             corners_nd = [
-                (a,             e),
-                (a + b,         e + f),
-                (a + c,         e + g),
+                (a, e),
+                (a + b, e + f),
+                (a + c, e + g),
                 (a + b + c + d, e + f + g + h),
             ]
             valid = [(num, den) for num, den in corners_nd if den != 0]
@@ -288,8 +326,14 @@ def _corner_val(num: int, den: int) -> float:
 
 
 def _should_ingest_x(
-    a: int, b: int, c: int, d: int,
-    e: int, f: int, g: int, h: int,
+    a: int,
+    b: int,
+    c: int,
+    d: int,
+    e: int,
+    f: int,
+    g: int,
+    h: int,
 ) -> bool:
     """Return True if reading the next term from x narrows the output range more than from y.
 
@@ -298,9 +342,9 @@ def _should_ingest_x(
     is the one that most needs to be pinned down by reading its next term.
     """
     # Corners: (∞,∞), (∞,1), (1,∞), (1,1)
-    c00 = _corner_val(a,             e)              # (∞, ∞)
-    c01 = _corner_val(a + b,         e + f)          # (∞, 1)
-    c10 = _corner_val(a + c,         e + g)          # (1, ∞)
+    c00 = _corner_val(a, e)  # (∞, ∞)
+    c01 = _corner_val(a + b, e + f)  # (∞, 1)
+    c10 = _corner_val(a + c, e + g)  # (1, ∞)
     c11 = _corner_val(a + b + c + d, e + f + g + h)  # (1, 1)
 
     def _spread(v1: float, v2: float, v3: float, v4: float) -> float:
@@ -310,13 +354,13 @@ def _should_ingest_x(
         return max(finite) - min(finite)
 
     # x-spread: corners varying x' (1→∞) with y' fixed
-    sx = _spread(c00, c10, c01, c11)   # all four corners
+    _spread(c00, c10, c01, c11)  # all four corners
     # y-spread: corners varying y' (1→∞) with x' fixed
     # As a proxy, compare the x-direction range vs y-direction range:
-    sx_inf = abs(c00 - c10)   # x: ∞ vs 1, with y=∞
-    sx_one = abs(c01 - c11)   # x: ∞ vs 1, with y=1
-    sy_inf = abs(c00 - c01)   # y: ∞ vs 1, with x=∞
-    sy_one = abs(c10 - c11)   # y: ∞ vs 1, with x=1
+    sx_inf = abs(c00 - c10)  # x: ∞ vs 1, with y=∞
+    sx_one = abs(c01 - c11)  # x: ∞ vs 1, with y=1
+    sy_inf = abs(c00 - c01)  # y: ∞ vs 1, with x=∞
+    sy_one = abs(c10 - c11)  # y: ∞ vs 1, with x=1
 
     spread_x = max(sx_inf, sx_one)
     spread_y = max(sy_inf, sy_one)
@@ -330,19 +374,18 @@ def _should_ingest_x(
     return spread_x >= spread_y
 
 
-def _bihomographic(x: CF, y: CF,
-                   a: int, b: int, c: int, d: int,
-                   e: int, f: int, g: int, h: int) -> CF:
+def _bihomographic(x: CF, y: CF, a: int, b: int, c: int, d: int, e: int, f: int, g: int, h: int) -> CF:
     from .core import CF as _CF
+
     xi = x._iter_from(0)
     yi = y._iter_from(0)
     return _CF([], _source=_bihomographic_terms(xi, yi, a, b, c, d, e, f, g, h))
 
 
-
 # ---------------------------------------------------------------------------
 # Public arithmetic
 # ---------------------------------------------------------------------------
+
 
 def cf_add(x: CF, y: CF) -> CF:
     """Return x + y as a continued fraction, computed exactly using Gosper's algorithm."""
@@ -357,6 +400,7 @@ def cf_sub(x: CF, y: CF) -> CF:
     """
     if x is y:
         from .core import CF as _CF
+
         return _CF.from_int(0)
     return _bihomographic(x, y, 0, 1, -1, 0, 0, 0, 0, 1)
 
@@ -391,6 +435,7 @@ def cf_div(x: CF, y: CF) -> CF:
     """
     if x is y:
         from .core import CF as _CF
+
         return _CF.from_int(1)
     return _bihomographic(x, y, 0, 1, 0, 0, 0, 0, 1, 0)
 

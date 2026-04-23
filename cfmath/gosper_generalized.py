@@ -101,6 +101,7 @@ _MAX_STALL = 1000
 # Core tensor operations — O(2ⁿ), no branching on input count
 # ---------------------------------------------------------------------------
 
+
 def _corner_sum(coeffs: list[int], c: int) -> int:
     """Sum of coeffs[i] for all i where (i & c) == c."""
     return sum(v for i, v in enumerate(coeffs) if (i & c) == c)
@@ -114,7 +115,7 @@ def _check_output(num: list[int], den: list[int], done: int) -> int | None:
     All remaining corners must have non-zero same-sign denominators and share
     the same integer floor.
     """
-    n = len(num).bit_length() - 1   # 2^n == len(num)
+    n = len(num).bit_length() - 1  # 2^n == len(num)
     floor_val: int | None = None
     sign: bool | None = None
     for c in range(1 << n):
@@ -144,9 +145,9 @@ def _ingest(num: list[int], den: list[int], n: int, j: int, t: int) -> tuple[lis
     for i in range(1 << n):
         if not (i & mask):  # bit j is 0 — process pair (i, i|mask)
             new_num[i | mask] = num[i | mask] * t + num[i]
-            new_num[i]        = num[i | mask]
+            new_num[i] = num[i | mask]
             new_den[i | mask] = den[i | mask] * t + den[i]
-            new_den[i]        = den[i | mask]
+            new_den[i] = den[i | mask]
     return new_num, new_den
 
 
@@ -160,6 +161,7 @@ def _emit(num: list[int], den: list[int], t: int) -> tuple[list[int], list[int]]
 # ---------------------------------------------------------------------------
 # Input selection — pick which input to consume next
 # ---------------------------------------------------------------------------
+
 
 def _corner_val_float(num: list[int], den: list[int], c: int) -> float:
     cd = _corner_sum(den, c)
@@ -178,8 +180,8 @@ def _input_spread(num: list[int], den: list[int], n: int, j: int, done: int) -> 
             continue  # need the j=∞ corner
         if (c & done) != done:
             continue  # done inputs must be at ∞
-        v_inf = _corner_val_float(num, den, c)           # j at ∞
-        v_one = _corner_val_float(num, den, c & ~mask)   # j at 1
+        v_inf = _corner_val_float(num, den, c)  # j at ∞
+        v_one = _corner_val_float(num, den, c & ~mask)  # j at 1
         if abs(v_inf) == float("inf") or abs(v_one) == float("inf"):
             return float("inf")
         max_spread = max(max_spread, abs(v_inf - v_one))
@@ -218,6 +220,7 @@ def _pick_input(num: list[int], den: list[int], n: int, started: int, done: int)
 # Main generator
 # ---------------------------------------------------------------------------
 
+
 def _n_ary_terms(
     iters: list[Iterator[int]],
     num: list[int],
@@ -246,6 +249,7 @@ def _n_ary_terms(
             cd = _corner_sum(den, all_mask)
             if cd != 0:
                 from .core import CF as _CF
+
                 yield from _CF.from_fraction(cn, cd)
             return
 
@@ -256,12 +260,12 @@ def _n_ary_terms(
 
         try:
             t_in = next(iters[j])
-            started |= (1 << j)
+            started |= 1 << j
             num, den = _ingest(num, den, n, j, t_in)
             stall += 1
         except StopIteration:
-            started |= (1 << j)
-            done |= (1 << j)
+            started |= 1 << j
+            done |= 1 << j
             stall = 0
             continue
 
@@ -285,6 +289,7 @@ def _n_ary_terms(
 # Public API
 # ---------------------------------------------------------------------------
 
+
 def cf_n_ary(inputs: list[CF], num: list[int], den: list[int]) -> CF:
     """Compute a multilinear rational formula of n CF inputs.
 
@@ -296,6 +301,7 @@ def cf_n_ary(inputs: list[CF], num: list[int], den: list[int]) -> CF:
         cf_n_ary([x, y], num=[0,1,1,0], den=[1,0,0,0])
     """
     from .core import CF as _CF
+
     iters = [x._iter_from(0) for x in inputs]
     return _CF([], _source=_n_ary_terms(iters, list(num), list(den)))
 
@@ -314,6 +320,7 @@ def cf_sub(x: CF, y: CF) -> CF:
     """Return x - y."""
     if x is y:
         from .core import CF as _CF
+
         return _CF.from_int(0)
     return cf_n_ary([x, y], num=[0, 1, -1, 0], den=[1, 0, 0, 0])
 
@@ -322,11 +329,13 @@ def cf_mul(x: CF, y: CF) -> CF:
     """Return x * y."""
     if x is y:
         from .quadratic import _periodic_square
+
         result = _periodic_square(x)
         if result is not None:
             return result
     elif x.is_periodic() and y.is_periodic():
         from .quadratic import _periodic_mul
+
         result = _periodic_mul(x, y)
         if result is not None:
             return result
@@ -337,6 +346,7 @@ def cf_div(x: CF, y: CF) -> CF:
     """Return x / y."""
     if x is y:
         from .core import CF as _CF
+
         return _CF.from_int(1)
     return cf_n_ary([x, y], num=[0, 1, 0, 0], den=[0, 0, 1, 0])
 

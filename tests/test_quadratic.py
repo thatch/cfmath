@@ -5,7 +5,7 @@ from fractions import Fraction
 
 import pytest
 
-from cfmath import CF, Sqrt, convergent, convergents
+from cfmath import CF, Sqrt, convergent
 
 
 class TestSqrt:

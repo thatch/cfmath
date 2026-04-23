@@ -7,9 +7,7 @@ hand-coded path in gosper.py.
 
 from fractions import Fraction
 
-import pytest
-
-from cfmath import CF, convergent, convergents, Phi, Sqrt
+from cfmath import CF, Phi, Sqrt, convergent, convergents
 from cfmath.gosper_generalized import (
     cf_add,
     cf_div,
@@ -37,6 +35,7 @@ def _ref(p: int, q: int = 1) -> CF:
 # ---------------------------------------------------------------------------
 # Addition
 # ---------------------------------------------------------------------------
+
 
 class TestAddition:
     def test_int_plus_int(self):
@@ -86,6 +85,7 @@ class TestAddition:
 # Subtraction
 # ---------------------------------------------------------------------------
 
+
 class TestSubtraction:
     def test_simple_sub(self):
         a = CF.from_fraction(5, 3)
@@ -110,6 +110,7 @@ class TestSubtraction:
 # ---------------------------------------------------------------------------
 # Multiplication
 # ---------------------------------------------------------------------------
+
 
 class TestMultiplication:
     def test_int_times_int(self):
@@ -151,6 +152,7 @@ class TestMultiplication:
 # Division
 # ---------------------------------------------------------------------------
 
+
 class TestDivision:
     def test_simple_div(self):
         a = CF.from_fraction(3, 4)
@@ -181,6 +183,7 @@ class TestDivision:
 # Powers (via repeated cf_mul / cf_homographic)
 # ---------------------------------------------------------------------------
 
+
 class TestPow:
     def test_square(self):
         a = CF.from_fraction(3, 2)
@@ -202,6 +205,7 @@ class TestPow:
 # Negation (via homographic)
 # ---------------------------------------------------------------------------
 
+
 class TestNegation:
     def test_negate(self):
         a = CF.from_fraction(3, 4)
@@ -216,6 +220,7 @@ class TestNegation:
 # ---------------------------------------------------------------------------
 # Mixed integer/CF arithmetic
 # ---------------------------------------------------------------------------
+
 
 class TestMixedArithmetic:
     def test_add_integer(self):
@@ -233,10 +238,11 @@ class TestMixedArithmetic:
 # Phi identity: φ² = φ + 1
 # ---------------------------------------------------------------------------
 
+
 class TestPhiIdentity:
     def test_phi_squared_is_phi_plus_one(self):
         phi = Phi()
-        phi_sq = cf_mul(phi, Phi())        # two independent Phi() objects
+        phi_sq = cf_mul(phi, Phi())  # two independent Phi() objects
         phi_plus_1 = cf_add(Phi(), _ref(1))
         depth = 15
         lhs = convergent(phi_sq.take(depth), depth - 1)
@@ -247,6 +253,7 @@ class TestPhiIdentity:
 # ---------------------------------------------------------------------------
 # sqrt(2) * sqrt(2) ≈ 2
 # ---------------------------------------------------------------------------
+
 
 class TestSqrt2Squared:
     def test_sqrt2_times_sqrt2(self):
@@ -261,21 +268,23 @@ class TestSqrt2Squared:
 # Homographic (unary) transform
 # ---------------------------------------------------------------------------
 
+
 class TestHomographic:
     def test_shift(self):
         x = CF.from_fraction(3, 7)
-        y = cf_homographic(x, 1, 2, 0, 1)   # x + 2
+        y = cf_homographic(x, 1, 2, 0, 1)  # x + 2
         assert _eval(y) == Fraction(3, 7) + 2
 
     def test_scale(self):
         x = CF.from_fraction(5, 11)
-        y = cf_homographic(x, 3, 0, 0, 1)   # 3x
+        y = cf_homographic(x, 3, 0, 0, 1)  # 3x
         assert _eval(y) == Fraction(15, 11)
 
 
 # ---------------------------------------------------------------------------
 # cf_n_ary — direct API tests
 # ---------------------------------------------------------------------------
+
 
 class TestNAry:
     def test_n_ary_add(self):
@@ -306,6 +315,7 @@ class TestNAry:
 # ---------------------------------------------------------------------------
 # Min / Max
 # ---------------------------------------------------------------------------
+
 
 class TestMinMax:
     def test_min(self):

@@ -3,9 +3,18 @@
 import math
 from fractions import Fraction
 
-import pytest
-
-from cfmath import CF, Phi, E, Pi, Tau, EulerGamma, Catalan, Apery, Plastic, Khinchin, convergent
+from cfmath import (
+    Apery,
+    Catalan,
+    E,
+    EulerGamma,
+    Khinchin,
+    Phi,
+    Pi,
+    Plastic,
+    Tau,
+    convergent,
+)
 
 
 class TestPhi:
@@ -60,8 +69,8 @@ class TestE:
         i = 1
         while i + 2 < len(terms):
             assert terms[i] == 1, f"terms[{i}] should be 1"
-            assert terms[i + 1] == 2 * k, f"terms[{i+1}] should be {2*k}"
-            assert terms[i + 2] == 1, f"terms[{i+2}] should be 1"
+            assert terms[i + 1] == 2 * k, f"terms[{i + 1}] should be {2 * k}"
+            assert terms[i + 2] == 1, f"terms[{i + 2}] should be 1"
             i += 3
             k += 1
 
@@ -118,6 +127,7 @@ class TestTau:
 class TestEulerGamma:
     def test_euler_gamma_value(self):
         import mpmath
+
         mpmath.mp.dps = 30
         expected = float(mpmath.euler)
         val = float(convergent(EulerGamma().take(20), 19))
@@ -134,6 +144,7 @@ class TestCatalan:
 
     def test_catalan_value(self):
         import mpmath
+
         mpmath.mp.dps = 30
         expected = float(mpmath.catalan)
         val = float(convergent(Catalan().take(20), 19))
@@ -141,6 +152,7 @@ class TestCatalan:
 
     def test_catalan_decimal_matches_mpmath(self):
         from cfmath.constants import _catalan_terms_from_decimal, _catalan_terms_mpmath
+
         assert _catalan_terms_from_decimal(30) == _catalan_terms_mpmath(30)
 
 
@@ -150,6 +162,7 @@ class TestApery:
 
     def test_apery_value(self):
         import mpmath
+
         mpmath.mp.dps = 30
         expected = float(mpmath.apery)
         val = float(convergent(Apery().take(20), 19))
@@ -157,6 +170,7 @@ class TestApery:
 
     def test_apery_decimal_matches_mpmath(self):
         from cfmath.constants import _apery_terms_from_decimal, _apery_terms_mpmath
+
         assert _apery_terms_from_decimal(30) == _apery_terms_mpmath(30)
 
 
@@ -166,6 +180,7 @@ class TestPlastic:
 
     def test_plastic_value(self):
         import mpmath
+
         mpmath.mp.dps = 30
         rho = mpmath.findroot(lambda x: x**3 - x - 1, 1.3)
         expected = float(rho)
@@ -180,6 +195,7 @@ class TestPlastic:
 
     def test_plastic_decimal_matches_mpmath(self):
         from cfmath.constants import _plastic_terms, _plastic_terms_mpmath
+
         assert _plastic_terms(30) == _plastic_terms_mpmath(30)
 
 
@@ -189,6 +205,7 @@ class TestKhinchin:
 
     def test_khinchin_value(self):
         import mpmath
+
         mpmath.mp.dps = 30
         expected = float(mpmath.khinchin)
         val = float(convergent(Khinchin().take(20), 19))

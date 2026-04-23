@@ -7,10 +7,10 @@ import pytest
 
 from cfmath import CF
 
-
 # ---------------------------------------------------------------------------
 # Construction
 # ---------------------------------------------------------------------------
+
 
 class TestFromInt:
     def test_positive(self):
@@ -66,8 +66,11 @@ class TestFromFraction:
 
     def test_roundtrip_various(self):
         fractions = [
-            Fraction(1, 3), Fraction(5, 7), Fraction(100, 99),
-            Fraction(355, 113), Fraction(1, 1000),
+            Fraction(1, 3),
+            Fraction(5, 7),
+            Fraction(100, 99),
+            Fraction(355, 113),
+            Fraction(1, 1000),
         ]
         for f in fractions:
             cf = CF.from_rational(f)
@@ -111,6 +114,7 @@ class TestFromTerms:
 # Iteration and take
 # ---------------------------------------------------------------------------
 
+
 class TestIteration:
     def test_finite_iter(self):
         cf = CF([3, 7, 15, 1])
@@ -118,7 +122,6 @@ class TestIteration:
 
     def test_periodic_iter(self):
         cf = CF([1], repeating=[2])
-        terms = [next(it) for it in [iter(cf)]][0]  # just check first
         it = iter(cf)
         assert next(it) == 1
         assert next(it) == 2
@@ -149,6 +152,7 @@ class TestIteration:
 # Predicates
 # ---------------------------------------------------------------------------
 
+
 class TestPredicates:
     def test_finite(self):
         assert CF([1, 2, 3]).is_finite()
@@ -167,6 +171,7 @@ class TestPredicates:
 # Representation
 # ---------------------------------------------------------------------------
 
+
 class TestRepr:
     def test_simple(self):
         r = repr(CF([3]))
@@ -182,6 +187,7 @@ class TestRepr:
 
     def test_infinite_hint(self):
         from cfmath import Pi
+
         r = repr(Pi())
         assert "..." in r or ";" in r
 
@@ -192,12 +198,14 @@ class TestRepr:
     def test_approx_irrational(self):
         # irrational → "≈"
         from cfmath import Sqrt
+
         assert "≈" in repr(Sqrt(2))
 
 
 # ---------------------------------------------------------------------------
 # to_fraction
 # ---------------------------------------------------------------------------
+
 
 class TestToFraction:
     def test_integer(self):
@@ -218,6 +226,7 @@ class TestToFraction:
 # ---------------------------------------------------------------------------
 # Equality and ordering
 # ---------------------------------------------------------------------------
+
 
 class TestEquality:
     def test_equal_fractions(self):
@@ -260,8 +269,8 @@ class TestEquality:
 # the step size 1/Bᵏ, so the algorithm works identically for any base ≥ 2.
 # ---------------------------------------------------------------------------
 
-class TestFromDigits:
 
+class TestFromDigits:
     # ---- exact rational values -----------------------------------------
     #
     # CFs created by from_digits() have a lazy _source, so is_finite() returns
@@ -283,8 +292,8 @@ class TestFromDigits:
     def test_three_quarters_binary(self):
         """0.11 in base 2 = 1/2 + 1/4 = 3/4.  CF of 3/4 = [0; 1, 3]."""
         cf = CF.from_digits([0, 1, 1], base=2)
-        assert list(cf.take(3)) == [0, 1, 3]   # shows the actual terms produced
-        assert cf == CF.from_fraction(3, 4)      # confirms the rational value
+        assert list(cf.take(3)) == [0, 1, 3]  # shows the actual terms produced
+        assert cf == CF.from_fraction(3, 4)  # confirms the rational value
 
     def test_one_and_half_hex(self):
         """1.8 in base 16 = 1 + 8/16 = 3/2.
@@ -339,7 +348,9 @@ class TestFromDigits:
         The base-10 digits are ground truth; from_digits() inverts the process.
         """
         from itertools import islice
+
         from cfmath import Pi
+
         pi_digits = list(islice(Pi().digits(10), 20))
         cf = CF.from_digits(pi_digits)
         assert list(cf.take(4)) == [3, 7, 15, 1]

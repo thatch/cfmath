@@ -16,12 +16,12 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 import math
 from fractions import Fraction
 
-from cfmath import CF, Pi, E, Phi, Sqrt, Sin, Ln
-
+from cfmath import E, Phi, Pi, Sin, Sqrt
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def log10_or_inf(f: Fraction) -> float:
     """Return floor(log10(f)) — i.e. the number of correct decimal digits."""
@@ -33,7 +33,7 @@ def log10_or_inf(f: Fraction) -> float:
 def show_convergence(label: str, cf_factory, n_terms_list: list[int]) -> None:
     print(f"  {label}")
     print(f"    {'n':>4}  {'bound':>12}  {'~digits':>8}  {'convergent value'}")
-    print(f"    {'-'*4}  {'-'*12}  {'-'*8}  {'-'*30}")
+    print(f"    {'-' * 4}  {'-' * 12}  {'-' * 8}  {'-' * 30}")
     for n in n_terms_list:
         trunc = cf_factory().take(n)
         bound = trunc.err_estimate
@@ -103,12 +103,12 @@ print("  gap(n)   = |take(n+1) - take(n)|  (tightest bound, needs +1 term)")
 print("  bound(n) = err_estimate on take(n) (no extra terms needed)")
 print()
 print(f"  {'n':>4}  {'gap(n)':>14}  {'bound(n)':>14}  {'bound/gap':>10}")
-print(f"  {'-'*4}  {'-'*14}  {'-'*14}  {'-'*10}")
+print(f"  {'-' * 4}  {'-' * 14}  {'-' * 14}  {'-' * 10}")
 
 for n in [2, 3, 4, 5, 6, 8, 10]:
-    trunc_n  = Pi().take(n)
+    trunc_n = Pi().take(n)
     trunc_n1 = Pi().take(n + 1)
-    gap   = abs(trunc_n1.to_fraction() - trunc_n.to_fraction())
+    gap = abs(trunc_n1.to_fraction() - trunc_n.to_fraction())
     bound = trunc_n.err_estimate
     ratio = float(bound / gap)
     print(f"  {n:>4}  {float(gap):>14.3e}  {float(bound):>14.3e}  {ratio:>10.2f}x")

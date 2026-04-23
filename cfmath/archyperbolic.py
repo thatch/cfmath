@@ -4,13 +4,13 @@ from __future__ import annotations
 
 from fractions import Fraction
 
+from ._backend import _HAS_MPMATH, _coerce_trig_arg, _lazy_cf
 from .core import CF
-from ._backend import _HAS_MPMATH, _lazy_cf, _coerce_trig_arg
-
 
 # ---------------------------------------------------------------------------
 # Decimal backends
 # ---------------------------------------------------------------------------
+
 
 def _arcsinh_terms_from_decimal(x_num: int, x_den: int, n_terms: int) -> list[int]:
     """Compute n_terms CF terms of arcsinh(x_num/x_den).
@@ -127,9 +127,11 @@ def _arccosh_terms_from_decimal(x_num: int, x_den: int, n_terms: int) -> list[in
 # mpmath backends
 # ---------------------------------------------------------------------------
 
+
 def _arcsinh_terms_mpmath(x_num: int, x_den: int, n_terms: int) -> list[int]:
     """Compute n_terms CF terms of arcsinh(x_num/x_den) using mpmath."""
     import mpmath
+
     mpmath.mp.dps = n_terms * 5 + 80
     val = mpmath.asinh(mpmath.mpf(x_num) / mpmath.mpf(x_den))
     terms: list[int] = []
@@ -143,6 +145,7 @@ def _arcsinh_terms_mpmath(x_num: int, x_den: int, n_terms: int) -> list[int]:
 def _arccosh_terms_mpmath(x_num: int, x_den: int, n_terms: int) -> list[int]:
     """Compute n_terms CF terms of arccosh(x_num/x_den) using mpmath."""
     import mpmath
+
     mpmath.mp.dps = n_terms * 5 + 80
     val = mpmath.acosh(mpmath.mpf(x_num) / mpmath.mpf(x_den))
     terms: list[int] = []
@@ -156,6 +159,7 @@ def _arccosh_terms_mpmath(x_num: int, x_den: int, n_terms: int) -> list[int]:
 def _arctanh_terms_mpmath(x_num: int, x_den: int, n_terms: int) -> list[int]:
     """Compute n_terms CF terms of arctanh(x_num/x_den) using mpmath."""
     import mpmath
+
     mpmath.mp.dps = n_terms * 5 + 80
     val = mpmath.atanh(mpmath.mpf(x_num) / mpmath.mpf(x_den))
     terms: list[int] = []
@@ -169,6 +173,7 @@ def _arctanh_terms_mpmath(x_num: int, x_den: int, n_terms: int) -> list[int]:
 # ---------------------------------------------------------------------------
 # Public functions
 # ---------------------------------------------------------------------------
+
 
 def Arctanh(x) -> CF:
     """Inverse hyperbolic tangent of x, as a continued fraction.
@@ -191,6 +196,7 @@ def Arctanh(x) -> CF:
         return CF.from_int(0)
     ratio = (Fraction(1) + x) / (Fraction(1) - x)
     from .logarithm import Ln
+
     return Ln(ratio) / CF.from_int(2)
 
 

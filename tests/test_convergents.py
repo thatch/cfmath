@@ -4,7 +4,16 @@ from fractions import Fraction
 
 import pytest
 
-from cfmath import CF, convergent, convergent_pair, convergent_pairs, convergents, Phi, Pi, Sqrt
+from cfmath import (
+    CF,
+    Phi,
+    Pi,
+    Sqrt,
+    convergent,
+    convergent_pair,
+    convergent_pairs,
+    convergents,
+)
 
 
 @pytest.fixture
@@ -70,7 +79,7 @@ class TestConvergentsIterator:
         """Even-indexed convergents < true value < odd-indexed convergents (for positive CFs > 1)."""
         pi = Pi()
         convs_list = [convergent(pi.take(8), i) for i in range(5)]
-        true_val = Fraction(3141592653589793, 10**15)  # approx Pi
+        Fraction(3141592653589793, 10**15)  # approx Pi
         # c0 < c2 < c4 < Pi < c3 < c1
         assert convs_list[0] < convs_list[2]
         assert convs_list[2] < convs_list[4]
@@ -128,6 +137,7 @@ class TestConvergentBound:
     def test_best_approximation_bound(self, pi_cf):
         """Each convergent satisfies |p/q - x| < 1/(q * q_next)."""
         import math
+
         pairs = list(convergent_pairs(pi_cf))
         true_val = math.pi
         for i, (p, q) in enumerate(pairs[:-1]):

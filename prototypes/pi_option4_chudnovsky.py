@@ -13,8 +13,8 @@ Each term contributes roughly 14.18 decimal digits of precision.
 
 from __future__ import annotations
 
-import math
 import decimal
+import math
 import sys
 from fractions import Fraction
 from typing import Iterator
@@ -22,16 +22,15 @@ from typing import Iterator
 # Add the src directory to path so we can import cfmath
 sys.path.insert(0, "/home/claude/cfmath/src")
 
-from cfmath.core import CF
 from cfmath.convergents import convergent
-
+from cfmath.core import CF
 
 # ---------------------------------------------------------------------------
 # Chudnovsky constants
 # ---------------------------------------------------------------------------
 
 _C = 640320
-_C3_OVER_24 = _C ** 3 // 24   # = 10939058860032000
+_C3_OVER_24 = _C**3 // 24  # = 10939058860032000
 _A = 13591409
 _B = 545140134
 # Each term gives log10(C^3 / 24) / 3 ≈ 14.18 digits
@@ -62,7 +61,7 @@ def _binary_split(a: int, b: int) -> tuple[int, int, int]:
             # p(a) = (6a-5)(2a-1)(6a-1)
             P = (6 * a - 5) * (2 * a - 1) * (6 * a - 1)
             # q(a) = a^3 * C^3 / 24
-            Q = a ** 3 * _C3_OVER_24
+            Q = a**3 * _C3_OVER_24
             # T = (-1)^a * P * (A + B*a)
             T = (-1) ** a * P * (_A + _B * a)
         return P, Q, T
@@ -120,7 +119,7 @@ def _pi_chudnovsky(n_cf_terms: int) -> tuple[list[int], int]:
     #   C^(3/2) = C * sqrt(C)
     C = decimal.Decimal(_C)
     sqrt_C = C.sqrt()
-    C_3_2 = C * sqrt_C   # 640320^(3/2)
+    C_3_2 = C * sqrt_C  # 640320^(3/2)
 
     numerator = C_3_2 * decimal.Decimal(Q)
     denominator = decimal.Decimal(12) * decimal.Decimal(T)
@@ -131,7 +130,7 @@ def _pi_chudnovsky(n_cf_terms: int) -> tuple[list[int], int]:
     cf_terms: list[int] = []
     x = pi_decimal
     for _ in range(n_cf_terms):
-        a = int(x)   # floor (ROUND_FLOOR context makes this safe)
+        a = int(x)  # floor (ROUND_FLOOR context makes this safe)
         cf_terms.append(a)
         frac = x - decimal.Decimal(a)
         # Stop if we've lost precision
@@ -182,7 +181,7 @@ if __name__ == "__main__":
 
     print(f"First 15 CF terms: {first_15}")
     print(f"Expected:          {EXPECTED_FIRST_15}")
-    match = (first_15 == EXPECTED_FIRST_15)
+    match = first_15 == EXPECTED_FIRST_15
     print(f"Match: {match}")
     assert match, f"CF terms mismatch!\n  got:      {first_15}\n  expected: {EXPECTED_FIRST_15}"
 

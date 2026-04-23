@@ -33,5 +33,5 @@ format:
 .PHONY: lint
 lint:
 	ruff check
-	python -m checkdeps --allow-names cfmath cfmath
+	python -m checkdeps --allow-names cfmath,mpmath cfmath
 	mypy --strict --install-types --non-interactive cfmath

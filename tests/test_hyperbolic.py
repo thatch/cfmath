@@ -5,10 +5,12 @@ from fractions import Fraction
 
 import pytest
 
-from cfmath import Sinh, Cosh, Tanh, convergent
+from cfmath import Cosh, Sinh, Tanh, convergent
 from cfmath.hyperbolic import (
-    _sinh_terms_mpmath, _sinh_terms_from_decimal,
-    _cosh_terms_mpmath, _cosh_terms_from_decimal,
+    _cosh_terms_from_decimal,
+    _cosh_terms_mpmath,
+    _sinh_terms_from_decimal,
+    _sinh_terms_mpmath,
     _tanh_terms_mpmath,
 )
 

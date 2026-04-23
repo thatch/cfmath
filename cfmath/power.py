@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from fractions import Fraction
 
-from .core import CF
 from ._backend import _HAS_MPMATH, _lazy_cf
+from .core import CF
 
 
 def _integer_cbrt(n: int) -> int:
@@ -13,7 +13,7 @@ def _integer_cbrt(n: int) -> int:
     if n <= 0:
         return 0
     x = int(round(n ** (1 / 3)))
-    while x ** 3 > n:
+    while x**3 > n:
         x -= 1
     while (x + 1) ** 3 <= n:
         x += 1
@@ -51,6 +51,7 @@ def _cbrt_terms_from_decimal(n: int, n_terms: int) -> list[int]:
 def _cbrt_terms_from_mpmath(n: int, n_terms: int) -> list[int]:
     """Compute CF terms for cbrt(n) using mpmath."""
     import mpmath
+
     mpmath.mp.dps = n_terms * 5 + 60
     val = mpmath.cbrt(mpmath.mpf(n))
     terms: list[int] = []
@@ -68,7 +69,7 @@ def Cuberoot(n: int) -> CF:
     Otherwise uses mpmath when available, else high-precision decimal arithmetic.
     """
     root = _integer_cbrt(n)
-    if root ** 3 == n:
+    if root**3 == n:
         return CF.from_int(root)
     if _HAS_MPMATH:
         return _lazy_cf(lambda n_terms: _cbrt_terms_from_mpmath(n, n_terms), initial=80)
@@ -110,13 +111,14 @@ def Pow(x, r) -> CF:
 
     # Integer exponent: compute exactly as a rational
     if r.denominator == 1:
-        return CF.from_rational(x ** r.numerator)
+        return CF.from_rational(x**r.numerator)
 
     # Square-root exponent: x^(p/2) = sqrt(x^p) — always a quadratic irrational
     if r.denominator == 2:
-        xp = x ** r.numerator
+        xp = x**r.numerator
         m, n = xp.numerator, xp.denominator
         from .quadratic import _cf_from_poly
+
         result = _cf_from_poly(n, 0, -m)
         if result is not None:
             return result
@@ -128,4 +130,5 @@ def Pow(x, r) -> CF:
     # General case: exp(r * ln(x))
     from .exponential import Exp
     from .logarithm import Ln
+
     return Exp(r * Ln(x))

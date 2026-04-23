@@ -4,13 +4,13 @@ from __future__ import annotations
 
 from fractions import Fraction
 
+from ._backend import _HAS_MPMATH, _coerce_trig_arg, _lazy_cf
 from .core import CF
-from ._backend import _HAS_MPMATH, _lazy_cf, _coerce_trig_arg
-
 
 # ---------------------------------------------------------------------------
 # Decimal backends for Sinh and Cosh
 # ---------------------------------------------------------------------------
+
 
 def _sinh_terms_from_decimal(x_num: int, x_den: int, n_terms: int) -> list[int]:
     """Compute n_terms CF terms of sinh(x_num/x_den) using high-precision Decimal.
@@ -86,9 +86,11 @@ def _cosh_terms_from_decimal(x_num: int, x_den: int, n_terms: int) -> list[int]:
 # mpmath backends for Sinh and Cosh
 # ---------------------------------------------------------------------------
 
+
 def _sinh_terms_mpmath(x_num: int, x_den: int, n_terms: int) -> list[int]:
     """Compute n_terms CF terms of sinh(x_num/x_den) using mpmath."""
     import mpmath
+
     mpmath.mp.dps = n_terms * 4 + 50
     val = mpmath.sinh(mpmath.mpf(x_num) / mpmath.mpf(x_den))
     terms: list[int] = []
@@ -102,6 +104,7 @@ def _sinh_terms_mpmath(x_num: int, x_den: int, n_terms: int) -> list[int]:
 def _cosh_terms_mpmath(x_num: int, x_den: int, n_terms: int) -> list[int]:
     """Compute n_terms CF terms of cosh(x_num/x_den) using mpmath."""
     import mpmath
+
     mpmath.mp.dps = n_terms * 4 + 50
     val = mpmath.cosh(mpmath.mpf(x_num) / mpmath.mpf(x_den))
     terms: list[int] = []
@@ -115,6 +118,7 @@ def _cosh_terms_mpmath(x_num: int, x_den: int, n_terms: int) -> list[int]:
 # ---------------------------------------------------------------------------
 # Lambert CF generator for Tanh (exact, no floating point)
 # ---------------------------------------------------------------------------
+
 
 def _tanh_pairs(x: Fraction):
     """Yield (b_n, a_{n+1}) pairs for the Lambert generalized CF of tanh(x).
@@ -131,6 +135,7 @@ def _tanh_pairs(x: Fraction):
 def _tanh_terms_mpmath(x_num: int, x_den: int, n_terms: int) -> list[int]:
     """Compute n_terms CF terms of tanh(x_num/x_den) using mpmath."""
     import mpmath
+
     mpmath.mp.dps = n_terms * 4 + 50
     val = mpmath.tanh(mpmath.mpf(x_num) / mpmath.mpf(x_den))
     terms: list[int] = []
@@ -144,6 +149,7 @@ def _tanh_terms_mpmath(x_num: int, x_den: int, n_terms: int) -> list[int]:
 # ---------------------------------------------------------------------------
 # Public functions
 # ---------------------------------------------------------------------------
+
 
 def Sinh(x) -> CF:
     """Hyperbolic sine of x, as a continued fraction.

@@ -4,13 +4,13 @@ from __future__ import annotations
 
 from fractions import Fraction
 
-from .core import CF
 from ._backend import _coerce_trig_arg
-
+from .core import CF
 
 # ---------------------------------------------------------------------------
 # Generalized CF generators (exact, no floating point)
 # ---------------------------------------------------------------------------
+
 
 def _tan_pairs(x: Fraction):
     """Yield (b_n, a_{n+1}) pairs for the Lambert generalized CF of tan(x).
@@ -50,9 +50,11 @@ def _cos_pairs(x: Fraction):
 # mpmath backends (for cross-checking; not used in dispatch)
 # ---------------------------------------------------------------------------
 
+
 def _sin_terms_mpmath(x_num: int, x_den: int, n_terms: int) -> list[int]:
     """Compute n_terms CF terms of sin(x_num/x_den) using mpmath."""
     import mpmath
+
     mpmath.mp.dps = n_terms * 4 + 50
     val = mpmath.sin(mpmath.mpf(x_num) / mpmath.mpf(x_den))
     terms: list[int] = []
@@ -66,6 +68,7 @@ def _sin_terms_mpmath(x_num: int, x_den: int, n_terms: int) -> list[int]:
 def _cos_terms_mpmath(x_num: int, x_den: int, n_terms: int) -> list[int]:
     """Compute n_terms CF terms of cos(x_num/x_den) using mpmath."""
     import mpmath
+
     mpmath.mp.dps = n_terms * 4 + 50
     val = mpmath.cos(mpmath.mpf(x_num) / mpmath.mpf(x_den))
     terms: list[int] = []
@@ -79,6 +82,7 @@ def _cos_terms_mpmath(x_num: int, x_den: int, n_terms: int) -> list[int]:
 def _tan_terms_mpmath(x_num: int, x_den: int, n_terms: int) -> list[int]:
     """Compute n_terms CF terms of tan(x_num/x_den) using mpmath."""
     import mpmath
+
     mpmath.mp.dps = n_terms * 4 + 50
     val = mpmath.tan(mpmath.mpf(x_num) / mpmath.mpf(x_den))
     terms: list[int] = []
@@ -92,6 +96,7 @@ def _tan_terms_mpmath(x_num: int, x_den: int, n_terms: int) -> list[int]:
 # ---------------------------------------------------------------------------
 # Public functions (use exact GCF — no external library required)
 # ---------------------------------------------------------------------------
+
 
 def Tan(x) -> CF:
     """Tangent of x (in radians), as a continued fraction.

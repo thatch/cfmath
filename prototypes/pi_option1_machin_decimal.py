@@ -9,17 +9,16 @@ arithmetic — no mpmath required.
 from __future__ import annotations
 
 import decimal
-import sys
 from fractions import Fraction
 from typing import Iterator
 
-from cfmath.core import CF
 from cfmath.convergents import convergent
-
+from cfmath.core import CF
 
 # ---------------------------------------------------------------------------
 # Low-level: arctan via Taylor series
 # ---------------------------------------------------------------------------
+
 
 def _arctan_decimal(x_num: int, x_den: int, prec: int) -> tuple[decimal.Decimal, int]:
     """Compute arctan(x_num/x_den) to `prec` decimal digits.
@@ -35,19 +34,19 @@ def _arctan_decimal(x_num: int, x_den: int, prec: int) -> tuple[decimal.Decimal,
     """
     D = decimal.Decimal
     x = D(x_num) / D(x_den)
-    x2 = x * x          # x² — we multiply each term by −x² to step forward
+    x2 = x * x  # x² — we multiply each term by −x² to step forward
 
     threshold = D(10) ** (-(prec + 10))
 
-    result = x           # first term: x / 1
-    term = x             # running term value
+    result = x  # first term: x / 1
+    term = x  # running term value
     n_terms = 1
 
-    k = 1                # denominator of the current term is 2k-1, next is 2k+1
+    k = 1  # denominator of the current term is 2k-1, next is 2k+1
     while True:
-        term = -term * x2        # multiply by −x² to get next-order term (unsigned)
+        term = -term * x2  # multiply by −x² to get next-order term (unsigned)
         k += 1
-        denom = D(2 * k - 1)    # 3, 5, 7, …
+        denom = D(2 * k - 1)  # 3, 5, 7, …
         contribution = term / denom
         result += contribution
         n_terms += 1
@@ -60,6 +59,7 @@ def _arctan_decimal(x_num: int, x_den: int, prec: int) -> tuple[decimal.Decimal,
 # ---------------------------------------------------------------------------
 # CF-term extraction: π via Machin's formula
 # ---------------------------------------------------------------------------
+
 
 def _pi_machin_decimal(n_terms: int) -> tuple[list[int], int, int]:
     """Compute n_terms CF terms of π using Machin's formula.
@@ -83,11 +83,11 @@ def _pi_machin_decimal(n_terms: int) -> tuple[list[int], int, int]:
     terms: list[int] = []
     x = pi
     for _ in range(n_terms):
-        a = int(x)           # floor (context rounds down)
+        a = int(x)  # floor (context rounds down)
         terms.append(a)
         frac = x - D(a)
         if frac <= D(10) ** (-(prec - 20)):
-            break            # precision exhausted
+            break  # precision exhausted
         x = D(1) / frac
 
     decimal.setcontext(decimal.DefaultContext)
@@ -97,6 +97,7 @@ def _pi_machin_decimal(n_terms: int) -> tuple[list[int], int, int]:
 # ---------------------------------------------------------------------------
 # CF object
 # ---------------------------------------------------------------------------
+
 
 def Pi_machin() -> CF:
     """Return a CF object for π, computed via Machin's formula.

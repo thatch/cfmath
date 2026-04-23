@@ -2,9 +2,7 @@
 
 from fractions import Fraction
 
-import pytest
-
-from cfmath import CF, convergent, convergents, Phi, Sqrt
+from cfmath import CF, Phi, Sqrt, convergent, convergents
 
 
 def _eval(cf: CF, depth: int = 15) -> Fraction:
@@ -22,6 +20,7 @@ def _ref(p: int, q: int = 1) -> CF:
 # ---------------------------------------------------------------------------
 # Addition
 # ---------------------------------------------------------------------------
+
 
 class TestAddition:
     def test_int_plus_int(self):
@@ -73,6 +72,7 @@ class TestAddition:
 # Subtraction
 # ---------------------------------------------------------------------------
 
+
 class TestSubtraction:
     def test_simple_sub(self):
         a = CF.from_fraction(5, 3)
@@ -97,6 +97,7 @@ class TestSubtraction:
 # ---------------------------------------------------------------------------
 # Multiplication
 # ---------------------------------------------------------------------------
+
 
 class TestMultiplication:
     def test_int_times_int(self):
@@ -138,6 +139,7 @@ class TestMultiplication:
 # Division
 # ---------------------------------------------------------------------------
 
+
 class TestDivision:
     def test_simple_div(self):
         a = CF.from_fraction(3, 4)
@@ -168,35 +170,37 @@ class TestDivision:
 # Powers
 # ---------------------------------------------------------------------------
 
+
 class TestPow:
     def test_square(self):
         a = CF.from_fraction(3, 2)
-        assert _eval(a ** 2) == Fraction(9, 4)
+        assert _eval(a**2) == Fraction(9, 4)
 
     def test_cube(self):
         a = CF.from_fraction(2, 1)
-        assert _eval(a ** 3) == Fraction(8)
+        assert _eval(a**3) == Fraction(8)
 
     def test_power_zero(self):
         a = CF.from_fraction(5, 3)
-        assert _eval(a ** 0) == Fraction(1)
+        assert _eval(a**0) == Fraction(1)
 
     def test_power_one(self):
         a = CF.from_fraction(5, 3)
-        assert _eval(a ** 1) == Fraction(5, 3)
+        assert _eval(a**1) == Fraction(5, 3)
 
     def test_negative_power(self):
         a = CF.from_fraction(2, 3)
-        assert _eval(a ** -1) == Fraction(3, 2)
+        assert _eval(a**-1) == Fraction(3, 2)
 
     def test_power_4(self):
         a = CF.from_fraction(3, 2)
-        assert _eval(a ** 4) == Fraction(81, 16)
+        assert _eval(a**4) == Fraction(81, 16)
 
 
 # ---------------------------------------------------------------------------
 # Negation
 # ---------------------------------------------------------------------------
+
 
 class TestNegation:
     def test_negate(self):
@@ -212,6 +216,7 @@ class TestNegation:
 # ---------------------------------------------------------------------------
 # Mixed integer/CF arithmetic
 # ---------------------------------------------------------------------------
+
 
 class TestMixedArithmetic:
     def test_radd(self):
@@ -229,10 +234,11 @@ class TestMixedArithmetic:
 # Phi identity: φ² = φ + 1
 # ---------------------------------------------------------------------------
 
+
 class TestPhiIdentity:
     def test_phi_squared_is_phi_plus_one(self):
         phi = Phi()
-        phi_sq = phi ** 2
+        phi_sq = phi**2
         phi_plus_1 = phi + CF.from_int(1)
         # Compare deep convergents
         depth = 15
@@ -244,6 +250,7 @@ class TestPhiIdentity:
 # ---------------------------------------------------------------------------
 # sqrt(2) * sqrt(2) ≈ 2
 # ---------------------------------------------------------------------------
+
 
 class TestSqrt2Squared:
     def test_sqrt2_times_sqrt2(self):
@@ -263,9 +270,11 @@ class TestSqrt2Squared:
 # Homographic (unary) transform
 # ---------------------------------------------------------------------------
 
+
 class TestHomographic:
     def test_shift(self):
         from cfmath.gosper import cf_homographic
+
         # y = x + 2: (1*x + 2) / (0*x + 1)
         x = CF.from_fraction(3, 7)
         y = cf_homographic(x, 1, 2, 0, 1)
@@ -273,6 +282,7 @@ class TestHomographic:
 
     def test_scale(self):
         from cfmath.gosper import cf_homographic
+
         # y = 3x: (3*x + 0) / (0*x + 1)
         x = CF.from_fraction(5, 11)
         y = cf_homographic(x, 3, 0, 0, 1)

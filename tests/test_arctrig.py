@@ -5,8 +5,12 @@ from fractions import Fraction
 
 import pytest
 
-from cfmath import Arctan, Arcsin, Arccos, convergent
-from cfmath.arctrig import _arctan_terms_mpmath, _arcsin_terms_mpmath, _arccos_terms_mpmath
+from cfmath import Arccos, Arcsin, Arctan, convergent
+from cfmath.arctrig import (
+    _arccos_terms_mpmath,
+    _arcsin_terms_mpmath,
+    _arctan_terms_mpmath,
+)
 
 
 class TestArctan:

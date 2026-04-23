@@ -20,27 +20,21 @@ Then:  arctan(x) = CF.from_fraction(x_num, x_den) / CF.from_generalized_cf(pairs
 
 from __future__ import annotations
 
-import sys
 import os
-
-# Set up TMPDIR / XDG_CACHE_DIR per CLAUDE.md conventions
-_uid = os.getuid()
-os.environ.setdefault("TMPDIR", f"/tmp/claude-{_uid}")
-os.environ.setdefault("XDG_CACHE_DIR", os.environ["TMPDIR"] + "/cache")
-
+import sys
 from fractions import Fraction
 from typing import Iterator
 
 # Allow running from repo root without installing the package
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from cfmath.core import CF
 from cfmath.convergents import convergent
-
+from cfmath.core import CF
 
 # ---------------------------------------------------------------------------
 # Generalized CF pairs for arctan(x_num/x_den)
 # ---------------------------------------------------------------------------
+
 
 def _arctan_pairs(x_num: int, x_den: int) -> Iterator[tuple[int, Fraction]]:
     """Yield (b_n, a_{n+1}) pairs for the denominator CF of arctan(x_num/x_den).
@@ -68,6 +62,7 @@ def _arctan_pairs(x_num: int, x_den: int) -> Iterator[tuple[int, Fraction]]:
 # Counting wrapper for pairs (to measure how many pairs are consumed)
 # ---------------------------------------------------------------------------
 
+
 class _CountingPairs:
     """Wraps a pairs iterator and counts how many pairs have been consumed."""
 
@@ -87,6 +82,7 @@ class _CountingPairs:
 # ---------------------------------------------------------------------------
 # arctan as a CF
 # ---------------------------------------------------------------------------
+
 
 def arctan_cf(x_num: int, x_den: int, counter: _CountingPairs | None = None) -> CF:
     """Return a CF for arctan(x_num / x_den).
@@ -113,6 +109,7 @@ def arctan_cf(x_num: int, x_den: int, counter: _CountingPairs | None = None) -> 
 # π via Machin's formula
 # ---------------------------------------------------------------------------
 
+
 def Pi_gosper() -> CF:
     """Return a CF for π = 16·arctan(1/5) − 4·arctan(1/239).
 
@@ -132,7 +129,7 @@ if __name__ == "__main__":
     KNOWN_PI_TERMS = [3, 7, 15, 1, 292, 1, 1, 1, 2, 1, 3, 1, 14, 2, 1]
 
     # --- Measure pair consumption while producing 15 terms ---
-    counter5 = _CountingPairs(iter([]))     # placeholder; arctan_cf will fill it
+    counter5 = _CountingPairs(iter([]))  # placeholder; arctan_cf will fill it
     counter239 = _CountingPairs(iter([]))
 
     at5 = arctan_cf(1, 5, counter=counter5)

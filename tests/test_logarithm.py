@@ -5,7 +5,7 @@ from fractions import Fraction
 
 import pytest
 
-from cfmath import CF, Ln, Log, Log10, Log2, convergent
+from cfmath import CF, Ln, Log, Log2, Log10, convergent
 from cfmath.logarithm import _ln_terms_from_decimal, _ln_terms_from_mpmath
 
 
