@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Iterator
 
-from ._backend import _HAS_MPMATH, _lazy_cf
+from ._backend import _HAS_MPMATH, _lazy_cf, _mpmath_cf
 from .core import CF
 
 # ---------------------------------------------------------------------------
@@ -64,45 +64,21 @@ def Tau() -> CF:
 # ---------------------------------------------------------------------------
 
 
-def _euler_gamma_terms(n_terms: int) -> list[int]:
-    """Compute n_terms CF terms of the Euler-Mascheroni constant γ using mpmath."""
-    import mpmath
-
-    mpmath.mp.dps = n_terms * 4 + 50
-    x = mpmath.euler
-    terms: list[int] = []
-    for _ in range(n_terms):
-        a = int(mpmath.floor(x))
-        terms.append(a)
-        x = 1 / (x - a)
-    return terms
-
-
 def EulerGamma() -> CF:
     """Euler-Mascheroni constant γ ≈ [0; 1, 1, 2, 1, 2, 1, 4, 3, 13, ...]
 
     γ = lim_{n→∞} (1 + 1/2 + ... + 1/n − ln n) ≈ 0.5772156649...
     """
-    return _lazy_cf(_euler_gamma_terms)
+    def _val():
+        import mpmath
+        return mpmath.euler
+
+    return _mpmath_cf(_val)
 
 
 # ---------------------------------------------------------------------------
 # Catalan's constant G
 # ---------------------------------------------------------------------------
-
-
-def _catalan_terms_mpmath(n_terms: int) -> list[int]:
-    """Compute n_terms CF terms of Catalan's constant using mpmath."""
-    import mpmath
-
-    mpmath.mp.dps = n_terms * 4 + 50
-    x = mpmath.catalan
-    terms: list[int] = []
-    for _ in range(n_terms):
-        a = int(mpmath.floor(x))
-        terms.append(a)
-        x = 1 / (x - a)
-    return terms
 
 
 def _catalan_terms_from_decimal(n_terms: int) -> list[int]:
@@ -153,27 +129,18 @@ def Catalan() -> CF:
 
     G = β(2) = Σ_{k=0}^∞ (-1)^k / (2k+1)² ≈ 0.9159655941772190...
     """
-    fn = _catalan_terms_mpmath if _HAS_MPMATH else _catalan_terms_from_decimal
-    return _lazy_cf(fn)
+    if _HAS_MPMATH:
+        def _val():
+            import mpmath
+            return mpmath.catalan
+
+        return _mpmath_cf(_val)
+    return _lazy_cf(_catalan_terms_from_decimal)
 
 
 # ---------------------------------------------------------------------------
 # Apéry's constant ζ(3)
 # ---------------------------------------------------------------------------
-
-
-def _apery_terms_mpmath(n_terms: int) -> list[int]:
-    """Compute n_terms CF terms of Apéry's constant ζ(3) using mpmath."""
-    import mpmath
-
-    mpmath.mp.dps = n_terms * 4 + 50
-    x = mpmath.apery
-    terms: list[int] = []
-    for _ in range(n_terms):
-        a = int(mpmath.floor(x))
-        terms.append(a)
-        x = 1 / (x - a)
-    return terms
 
 
 def _apery_terms_from_decimal(n_terms: int) -> list[int]:
@@ -225,27 +192,18 @@ def Apery() -> CF:
 
     ζ(3) = Σ_{n=1}^∞ 1/n³ ≈ 1.2020569031595942...
     """
-    fn = _apery_terms_mpmath if _HAS_MPMATH else _apery_terms_from_decimal
-    return _lazy_cf(fn)
+    if _HAS_MPMATH:
+        def _val():
+            import mpmath
+            return mpmath.apery
+
+        return _mpmath_cf(_val)
+    return _lazy_cf(_apery_terms_from_decimal)
 
 
 # ---------------------------------------------------------------------------
 # Plastic constant
 # ---------------------------------------------------------------------------
-
-
-def _plastic_terms_mpmath(n_terms: int) -> list[int]:
-    """Compute n_terms CF terms of the plastic constant using mpmath."""
-    import mpmath
-
-    mpmath.mp.dps = n_terms * 4 + 50
-    x = mpmath.findroot(lambda z: z**3 - z - 1, mpmath.mpf("1.3"))
-    terms: list[int] = []
-    for _ in range(n_terms):
-        a = int(mpmath.floor(x))
-        terms.append(a)
-        x = 1 / (x - a)
-    return terms
 
 
 def _plastic_terms(n_terms: int) -> list[int]:
@@ -284,27 +242,18 @@ def Plastic() -> CF:
     Real root of x³ − x − 1 = 0 ≈ 1.32471795724474602596...
     A cubic irrational — aperiodic CF unlike quadratic Phi = [1; 1, 1, 1, ...].
     """
-    fn = _plastic_terms_mpmath if _HAS_MPMATH else _plastic_terms
-    return _lazy_cf(fn)
+    if _HAS_MPMATH:
+        def _val():
+            import mpmath
+            return mpmath.findroot(lambda z: z**3 - z - 1, mpmath.mpf("1.3"))
+
+        return _mpmath_cf(_val)
+    return _lazy_cf(_plastic_terms)
 
 
 # ---------------------------------------------------------------------------
 # Khinchin's constant
 # ---------------------------------------------------------------------------
-
-
-def _khinchin_terms(n_terms: int) -> list[int]:
-    """Compute n_terms CF terms of Khinchin's constant K using mpmath."""
-    import mpmath
-
-    mpmath.mp.dps = n_terms * 4 + 50
-    x = mpmath.khinchin
-    terms: list[int] = []
-    for _ in range(n_terms):
-        a = int(mpmath.floor(x))
-        terms.append(a)
-        x = 1 / (x - a)
-    return terms
 
 
 def Khinchin() -> CF:
@@ -315,4 +264,8 @@ def Khinchin() -> CF:
 
         K = Π_{k=1}^∞ (1 + 1/(k(k+2)))^{log₂ k}
     """
-    return _lazy_cf(_khinchin_terms)
+    def _val():
+        import mpmath
+        return mpmath.khinchin
+
+    return _mpmath_cf(_val)
