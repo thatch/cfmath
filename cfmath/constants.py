@@ -69,8 +69,10 @@ def EulerGamma() -> CF:
 
     γ = lim_{n→∞} (1 + 1/2 + ... + 1/n − ln n) ≈ 0.5772156649...
     """
+
     def _val():
         import mpmath
+
         return mpmath.euler
 
     return _mpmath_cf(_val)
@@ -130,8 +132,10 @@ def Catalan() -> CF:
     G = β(2) = Σ_{k=0}^∞ (-1)^k / (2k+1)² ≈ 0.9159655941772190...
     """
     if _HAS_MPMATH:
+
         def _val():
             import mpmath
+
             return mpmath.catalan
 
         return _mpmath_cf(_val)
@@ -193,8 +197,10 @@ def Apery() -> CF:
     ζ(3) = Σ_{n=1}^∞ 1/n³ ≈ 1.2020569031595942...
     """
     if _HAS_MPMATH:
+
         def _val():
             import mpmath
+
             return mpmath.apery
 
         return _mpmath_cf(_val)
@@ -243,8 +249,10 @@ def Plastic() -> CF:
     A cubic irrational — aperiodic CF unlike quadratic Phi = [1; 1, 1, 1, ...].
     """
     if _HAS_MPMATH:
+
         def _val():
             import mpmath
+
             return mpmath.findroot(lambda z: z**3 - z - 1, mpmath.mpf("1.3"))
 
         return _mpmath_cf(_val)
@@ -264,8 +272,10 @@ def Khinchin() -> CF:
 
         K = Π_{k=1}^∞ (1 + 1/(k(k+2)))^{log₂ k}
     """
+
     def _val():
         import mpmath
+
         return mpmath.khinchin
 
     return _mpmath_cf(_val)

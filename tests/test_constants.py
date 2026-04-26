@@ -152,6 +152,7 @@ class TestCatalan:
 
     def test_catalan_decimal_matches_mpmath(self):
         import mpmath
+
         from cfmath._backend import _extract_cf_terms
         from cfmath.constants import _catalan_terms_from_decimal
 
@@ -174,6 +175,7 @@ class TestApery:
 
     def test_apery_decimal_matches_mpmath(self):
         import mpmath
+
         from cfmath._backend import _extract_cf_terms
         from cfmath.constants import _apery_terms_from_decimal
 
@@ -203,6 +205,7 @@ class TestPlastic:
 
     def test_plastic_decimal_matches_mpmath(self):
         import mpmath
+
         from cfmath._backend import _extract_cf_terms
         from cfmath.constants import _plastic_terms
 

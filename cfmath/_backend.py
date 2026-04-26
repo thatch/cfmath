@@ -98,45 +98,58 @@ def _mpmath_cf(
     ``value_fn()`` is called with ``mp.dps`` already set; it should return the
     mpmath value to convert (e.g. ``lambda: mpmath.euler``).
 
-    Precision starts at *initial_dps* and doubles each time the consumer asks
-    for more terms than the current precision supports.  On each doubling, the
-    previously emitted terms are re-extracted and validated against the prior
-    batch — catching any precision-related inconsistency before emitting new terms.
+    Always maintains two consecutive precision levels (lo and hi = lo × scale).
+    Only terms where lo and hi agree are emitted — the first disagreement is the
+    empirical precision boundary, so no per-constant tuning is needed and marginal
+    terms are automatically filtered.  When the consumer asks for more terms, hi
+    becomes the new lo and a fresh hi is computed at the next level.
     """
     import mpmath
 
-    mpmath.mp.dps = initial_dps
-    first_batch = _extract_cf_terms(value_fn(), guard_bits)
-    static = first_batch[:10]
+    def _get(dps: int) -> list[int]:
+        mpmath.mp.dps = dps
+        return _extract_cf_terms(value_fn(), guard_bits)
+
+    def _agree_up_to(a: list[int], b: list[int]) -> int:
+        """First index where a and b differ, or min(len(a), len(b)) if all agree."""
+        for i, (x, y) in enumerate(zip(a, b)):
+            if x != y:
+                return i
+        return min(len(a), len(b))
+
+    # Bootstrap: compute at two consecutive levels, emit only agreed terms.
+    lo = _get(initial_dps)
+    hi = _get(int(initial_dps * scale))
+    first_valid = _agree_up_to(lo, hi)
+
+    static = hi[: min(10, first_valid)] if first_valid else hi[:1]
 
     def _source() -> Iterator[int]:
-        confirmed = list(first_batch)
-        yield from confirmed[10:]
+        cur_lo = hi
+        cur_dps = int(initial_dps * scale)
+        emitted = len(static)
 
-        dps = int(initial_dps * scale)
+        yield from cur_lo[emitted:first_valid]
+        emitted = first_valid
+
         while True:
-            mpmath.mp.dps = dps
-            batch = _extract_cf_terms(value_fn(), guard_bits)
+            cur_dps = int(cur_dps * scale)
+            cur_hi = _get(cur_dps)
+            new_valid = _agree_up_to(cur_lo, cur_hi)
 
-            if batch[: len(confirmed)] != confirmed:
-                bad = next(
-                    i
-                    for i, (a, b) in enumerate(zip(batch, confirmed))
-                    if a != b
-                )
+            if new_valid < emitted:
                 raise ArithmeticError(
-                    f"CF term {bad} changed from {confirmed[bad]} to {batch[bad]} "
-                    f"on precision increase to {dps} dps"
+                    f"CF term {new_valid} changed from {cur_lo[new_valid]} to "
+                    f"{cur_hi[new_valid]} at {cur_dps} dps — previously emitted "
+                    f"term is wrong"
                 )
 
-            new = batch[len(confirmed) :]
-            if not new:
-                dps = int(dps * scale)
-                continue
+            new_terms = cur_hi[emitted:new_valid]
+            if new_terms:
+                yield from new_terms
+                emitted = new_valid
 
-            yield from new
-            confirmed = batch
-            dps = int(dps * scale)
+            cur_lo = cur_hi
 
     return CF(static, _source=_source())
 
