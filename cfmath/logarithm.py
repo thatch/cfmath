@@ -103,17 +103,18 @@ def Ln(x: int | Fraction | CF) -> CF:
     x may be a positive int, Fraction, or CF.
     Uses ln(x) = 2·atanh((x-1)/(x+1)) with argument reduction when mpmath
     is unavailable, otherwise delegates to mpmath for speed.
-    CF inputs always require mpmath.
+    CF inputs always require mpmath (used to evaluate a convergent).
 
     Examples::
 
         Ln(2)        # ≈ [0; 1, 2, 3, 1, 6, 3, 1, 1, 2, ...]
         Ln(3)        # ≈ [1; 10, 7, 9, 2, 2, 1, 3, 1, ...]
-        Ln(Sqrt(2))  # ≈ [0; 2, 1, 2, 1, 4, 1, ...]  (= ln(2)/2)
+        Ln(Sqrt(2))  # = Ln(2)/2 ≈ [0; 2, 3, 1, 6, 3, 1, 1, 2, ...]
     """
     if isinstance(x, CF):
         x_cf: CF = x
         return _lazy_cf(lambda n: _ln_terms_from_cf(x_cf, n))
+
     if isinstance(x, int):
         x = Fraction(x)
     elif not isinstance(x, Fraction):
