@@ -5,9 +5,15 @@ from fractions import Fraction
 
 import pytest
 
-from cfmath import CF, Cuberoot, Nthroot, Pi, Pow, Sqrt, convergent, convergents
+from cfmath import CF, Cuberoot, Nthroot, Pi, Pow, Sqrt, convergent
 from cfmath.logarithm import Ln
-from cfmath.power import _floor_kth_root_rational, _horner_update, _kthroot_cf_gen
+from cfmath.power import (
+    _bracket_floor,
+    _floor_kth_root_rational,
+    _horner_update,
+    _init_bracket_poly,
+    _pow_rational_cf_gen,
+)
 
 
 class TestHornerUpdate:
@@ -38,16 +44,16 @@ class TestHornerUpdate:
 
 class TestFloorKthRootRational:
     def test_integer_inputs(self):
-        assert _floor_kth_root_rational(2, 1, 3) == 1   # cbrt(2) ≈ 1.26
-        assert _floor_kth_root_rational(8, 1, 3) == 2   # cbrt(8) = 2 exactly
-        assert _floor_kth_root_rational(9, 1, 3) == 2   # cbrt(9) ≈ 2.08
+        assert _floor_kth_root_rational(2, 1, 3) == 1  # cbrt(2) ≈ 1.26
+        assert _floor_kth_root_rational(8, 1, 3) == 2  # cbrt(8) = 2 exactly
+        assert _floor_kth_root_rational(9, 1, 3) == 2  # cbrt(9) ≈ 2.08
 
     def test_fraction_less_than_one(self):
-        assert _floor_kth_root_rational(1, 8, 3) == 0   # (1/8)^(1/3) = 0.5
+        assert _floor_kth_root_rational(1, 8, 3) == 0  # (1/8)^(1/3) = 0.5
 
     def test_fraction_between_integers(self):
-        assert _floor_kth_root_rational(2, 3, 3) == 0   # (2/3)^(1/3) ≈ 0.874
-        assert _floor_kth_root_rational(3, 2, 3) == 1   # (3/2)^(1/3) ≈ 1.145
+        assert _floor_kth_root_rational(2, 3, 3) == 0  # (2/3)^(1/3) ≈ 0.874
+        assert _floor_kth_root_rational(3, 2, 3) == 1  # (3/2)^(1/3) ≈ 1.145
 
 
 class TestCuberoot:
@@ -247,6 +253,77 @@ class TestCFPow:
     def test_integer_pow_unchanged(self):
         result = Sqrt(2) ** 2
         assert result.to_fraction() == 2
+
+
+class TestBracketFloor:
+    def test_normal_polynomial(self):
+        # y^2 - 2 = 0, root = sqrt(2) ≈ 1.414
+        assert _bracket_floor([-1, 0, 2]) == 1
+
+    def test_degenerate_leading_zero(self):
+        # [0, 1] is degenerate (represents 1/0 = ∞)
+        assert _bracket_floor([0, 1]) is None
+
+    def test_exact_integer_root(self):
+        # y - 8 = 0, root = 8
+        assert _bracket_floor([1, -8]) == 8
+
+
+class TestInitBracketPoly:
+    def test_integer_base_degree1(self):
+        # (2/1)^(3/1): polynomial y - 8 = 0
+        assert _init_bracket_poly(2, 1, 3, 1) == [1, -8]
+
+    def test_integer_base_degree7(self):
+        # (2/1)^(22/7): polynomial y^7 - 2^22 = 0
+        poly = _init_bracket_poly(2, 1, 22, 7)
+        assert poly[0] == 1
+        assert poly[-1] == -(2**22)
+        assert len(poly) == 8
+        assert poly[1:-1] == [0] * 6
+
+    def test_fraction_base(self):
+        # (2/3)^(1/2): polynomial 3*y^2 - 2 = 0
+        assert _init_bracket_poly(2, 3, 1, 2) == [3, 0, -2]
+
+
+class TestPowRationalCF:
+    def test_first_term_2_pi(self):
+        # floor(2^π) = floor(8.824...) = 8
+        gen = _pow_rational_cf_gen(2, 1, Pi())
+        assert next(gen) == 8
+
+    def test_first_few_terms_2_pi(self):
+        # 2^π CF = [8; 1, 4, 1, 2, ...] — verify exact terms, then convergent accuracy
+        result = CF([], _source=_pow_rational_cf_gen(2, 1, Pi()))
+        terms = list(result.take(5))
+        assert terms == [8, 1, 4, 1, 2]
+        val = float(convergent(result.take(5), 4))
+        assert abs(val - math.exp(math.pi * math.log(2))) < 2e-3
+
+    def test_agrees_with_numerical_for_small_base(self):
+        # 3^π: exact bracket terms should agree with numerical float value
+        result = CF([], _source=_pow_rational_cf_gen(3, 1, Pi()))
+        terms = list(result.take(4))
+        assert terms[0] == 31
+        val = float(convergent(result.take(4), 3))
+        assert abs(val - math.exp(math.pi * math.log(3))) < 2e-3
+
+    def test_degenerate_bracket_handled(self):
+        # 2^(3/1) = 8 exactly; the lower bracket degenerates after emitting 8,
+        # forcing a re-initialization — verify we still get the correct 2nd term
+        result = CF([], _source=_pow_rational_cf_gen(2, 1, Pi()))
+        terms = list(result.take(3))
+        assert terms[0] == 8  # floor(2^π)
+        assert terms[1] == 1  # next CF term of 2^π
+
+    def test_fraction_base(self):
+        # (3/2)^π ≈ 3.574..., CF = [3; 1, 1, 2, 1, 6, ...]
+        result = CF([], _source=_pow_rational_cf_gen(3, 2, Pi()))
+        terms = list(result.take(6))
+        assert terms[0] == 3
+        val = float(convergent(result.take(6), 5))
+        assert abs(val - math.exp(math.pi * math.log(1.5))) < 1e-4
 
 
 class TestLnCF:

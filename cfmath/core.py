@@ -552,7 +552,7 @@ class CF:
 
         return cf_homographic(self, -1, 0, 0, 1)
 
-    def __pow__(self, n) -> CF:
+    def __pow__(self, n: int | Fraction | CF) -> CF:
         if isinstance(n, int):
             if n == 0:
                 return CF.from_int(1)
@@ -588,7 +588,7 @@ class CF:
 
         return NotImplemented
 
-    def __rpow__(self, other) -> CF:
+    def __rpow__(self, other: int | Fraction) -> CF:
         """Support int ** CF and Fraction ** CF (e.g. 2 ** Pi())."""
         if isinstance(other, int):
             other = Fraction(other)

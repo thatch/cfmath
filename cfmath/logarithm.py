@@ -112,7 +112,8 @@ def Ln(x: int | Fraction | CF) -> CF:
         Ln(Sqrt(2))  # ≈ [0; 2, 1, 2, 1, 4, 1, ...]  (= ln(2)/2)
     """
     if isinstance(x, CF):
-        return _lazy_cf(lambda n: _ln_terms_from_cf(x, n))
+        x_cf: CF = x
+        return _lazy_cf(lambda n: _ln_terms_from_cf(x_cf, n))
     if isinstance(x, int):
         x = Fraction(x)
     elif not isinstance(x, Fraction):
