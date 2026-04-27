@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Iterator
+from typing import Any, Iterator
 
 from ._backend import _HAS_MPMATH, _lazy_cf, _mpmath_cf
 from .core import CF
@@ -70,7 +70,7 @@ def EulerGamma() -> CF:
     γ = lim_{n→∞} (1 + 1/2 + ... + 1/n − ln n) ≈ 0.5772156649...
     """
 
-    def _val():
+    def _val() -> Any:
         import mpmath
 
         return mpmath.euler
@@ -133,7 +133,7 @@ def Catalan() -> CF:
     """
     if _HAS_MPMATH:
 
-        def _val():
+        def _val() -> Any:
             import mpmath
 
             return mpmath.catalan
@@ -198,7 +198,7 @@ def Apery() -> CF:
     """
     if _HAS_MPMATH:
 
-        def _val():
+        def _val() -> Any:
             import mpmath
 
             return mpmath.apery
@@ -250,7 +250,7 @@ def Plastic() -> CF:
     """
     if _HAS_MPMATH:
 
-        def _val():
+        def _val() -> Any:
             import mpmath
 
             return mpmath.findroot(lambda z: z**3 - z - 1, mpmath.mpf("1.3"))
@@ -273,7 +273,7 @@ def Khinchin() -> CF:
         K = Π_{k=1}^∞ (1 + 1/(k(k+2)))^{log₂ k}
     """
 
-    def _val():
+    def _val() -> Any:
         import mpmath
 
         return mpmath.khinchin
