@@ -5,7 +5,7 @@ from __future__ import annotations
 import math
 import os
 from fractions import Fraction
-from typing import Iterator
+from typing import Iterable, Iterator
 
 _GCF_STALL_LIMIT = int(os.environ.get("CFRAC_GCF_STALL_LIMIT", "100"))
 
@@ -92,7 +92,7 @@ class CF:
         return cls(terms, repeating)
 
     @classmethod
-    def from_digits(cls, digits, base: int = 10) -> CF:
+    def from_digits(cls, digits: Iterable[int], base: int = 10) -> CF:
         """Convert a stream of base-B digits to a continued fraction.
 
         This is the inverse of digits(): where digits() pushes CF terms in and
@@ -122,7 +122,7 @@ class CF:
         and takes the reciprocal of the fractional remainder.
         """
 
-        def _gen():
+        def _gen() -> Iterator[int]:
             it = iter(digits)
             try:
                 d0 = next(it)
@@ -136,7 +136,7 @@ class CF:
             y_lo = Fraction(d0)
             step = Fraction(1)  # width of the y-interval; starts at 1
 
-            def emit_while_pinned():
+            def emit_while_pinned() -> Iterator[int]:
                 """Emit CF terms as long as the x-interval pins a single floor."""
                 nonlocal p, q, r, s
                 while True:
@@ -508,44 +508,44 @@ class CF:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _coerce(other) -> CF:
+    def _coerce(other: object) -> "CF | None":
         if isinstance(other, CF):
             return other
         if isinstance(other, (int, Fraction)):
             return CF.from_rational(Fraction(other))
-        return NotImplemented
+        return None
 
-    def __add__(self, other) -> CF:
-        other = CF._coerce(other)
-        if other is NotImplemented:
+    def __add__(self, other: object) -> "CF":
+        coerced = CF._coerce(other)
+        if coerced is None:
             return NotImplemented
         from .gosper import cf_add
 
-        return cf_add(self, other)
+        return cf_add(self, coerced)
 
-    def __sub__(self, other) -> CF:
-        other = CF._coerce(other)
-        if other is NotImplemented:
+    def __sub__(self, other: object) -> "CF":
+        coerced = CF._coerce(other)
+        if coerced is None:
             return NotImplemented
         from .gosper import cf_sub
 
-        return cf_sub(self, other)
+        return cf_sub(self, coerced)
 
-    def __mul__(self, other) -> CF:
-        other = CF._coerce(other)
-        if other is NotImplemented:
+    def __mul__(self, other: object) -> "CF":
+        coerced = CF._coerce(other)
+        if coerced is None:
             return NotImplemented
         from .gosper import cf_mul
 
-        return cf_mul(self, other)
+        return cf_mul(self, coerced)
 
-    def __truediv__(self, other) -> CF:
-        other = CF._coerce(other)
-        if other is NotImplemented:
+    def __truediv__(self, other: object) -> "CF":
+        coerced = CF._coerce(other)
+        if coerced is None:
             return NotImplemented
         from .gosper import cf_div
 
-        return cf_div(self, other)
+        return cf_div(self, coerced)
 
     def __neg__(self) -> CF:
         from .gosper import cf_homographic
@@ -602,7 +602,7 @@ class CF:
         return cf_homographic(self, 1, 0, 0, 1)
 
     @classmethod
-    def from_generalized_cf(cls, pairs) -> CF:
+    def from_generalized_cf(cls, pairs: Iterable[tuple[int | Fraction, int | Fraction]]) -> CF:
         """Convert a generalized continued fraction to a simple CF, lazily.
 
         A generalized CF has the form:
@@ -639,13 +639,13 @@ class CF:
         """
         from fractions import Fraction as _Frac
 
-        def _terms():
+        def _terms() -> Iterator[int]:
             a = _Frac(1)
             b = _Frac(0)
             c = _Frac(0)
             d = _Frac(1)
 
-            def _try_emit():
+            def _try_emit() -> Iterator[int]:
                 # Emit simple CF terms while the output on x' ∈ [1,∞) is
                 # determined: both corner denominators same sign, floors agree.
                 nonlocal a, b, c, d

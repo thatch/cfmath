@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from fractions import Fraction
+from typing import Iterator
 
 from ._backend import _HAS_MPMATH, _coerce_trig_arg, _lazy_cf
 from .core import CF
@@ -120,7 +121,7 @@ def _cosh_terms_mpmath(x_num: int, x_den: int, n_terms: int) -> list[int]:
 # ---------------------------------------------------------------------------
 
 
-def _tanh_pairs(x: Fraction):
+def _tanh_pairs(x: Fraction) -> Iterator[tuple[int, Fraction]]:
     """Yield (b_n, a_{n+1}) pairs for the Lambert generalized CF of tanh(x).
 
     tanh(x) = x / (1 + x²/(3 + x²/(5 + x²/(7 + ...))))
@@ -151,7 +152,7 @@ def _tanh_terms_mpmath(x_num: int, x_den: int, n_terms: int) -> list[int]:
 # ---------------------------------------------------------------------------
 
 
-def Sinh(x) -> CF:
+def Sinh(x: int | Fraction) -> CF:
     """Hyperbolic sine of x, as a continued fraction.
 
     x may be an int or Fraction.  Returns CF([0]) for x=0.
@@ -172,7 +173,7 @@ def Sinh(x) -> CF:
     return _lazy_cf(lambda n: _sinh_terms_from_decimal(num, den, n))
 
 
-def Cosh(x) -> CF:
+def Cosh(x: int | Fraction) -> CF:
     """Hyperbolic cosine of x, as a continued fraction.
 
     x may be an int or Fraction.  Returns CF([1]) for x=0.
@@ -193,7 +194,7 @@ def Cosh(x) -> CF:
     return _lazy_cf(lambda n: _cosh_terms_from_decimal(num, den, n))
 
 
-def Tanh(x) -> CF:
+def Tanh(x: int | Fraction) -> CF:
     """Hyperbolic tangent of x, as a continued fraction.
 
     x may be an int or Fraction.  Returns CF([0]) for x=0.

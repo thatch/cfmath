@@ -22,7 +22,8 @@ def _bernoulli(n: int) -> Fraction:
     B: list[Fraction] = [Fraction(0)] * (n + 1)
     B[0] = Fraction(1)
     for m in range(1, n + 1):
-        B[m] = -sum(Fraction(comb(m + 1, k)) * B[k] for k in range(m)) / (m + 1)
+        total: Fraction = sum((Fraction(comb(m + 1, k)) * B[k] for k in range(m)), Fraction(0))
+        B[m] = -total / (m + 1)
     return B[n]
 
 
@@ -149,7 +150,7 @@ def _gamma_terms_mpmath(x_num: int, x_den: int, n_terms: int) -> list[int]:
     return terms
 
 
-def Gamma(x) -> CF:
+def Gamma(x: int | Fraction) -> CF:
     """Gamma function Γ(x) for positive rational x.
 
     x may be a positive int or Fraction.

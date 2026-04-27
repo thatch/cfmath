@@ -76,7 +76,7 @@ def _ln_terms_from_mpmath(x_num: int, x_den: int, n_terms: int) -> list[int]:
     return terms
 
 
-def Ln(x) -> CF:
+def Ln(x: int | Fraction | CF) -> CF:
     """Natural logarithm of x.
 
     x may be a positive int or Fraction.
@@ -103,7 +103,7 @@ def Ln(x) -> CF:
     return _lazy_cf(lambda n: _ln_terms_from_decimal(num, den, n))
 
 
-def Log10(x) -> CF:
+def Log10(x: int | Fraction | CF) -> CF:
     """Common logarithm (base 10) of x, as a continued fraction.
 
     x may be a positive int or Fraction.
@@ -118,7 +118,7 @@ def Log10(x) -> CF:
     return Ln(x) / Ln(10)
 
 
-def Log(x, base=None) -> CF:
+def Log(x: int | Fraction | CF, base: int | Fraction | None = None) -> CF:
     """Logarithm of x to the given base, as a continued fraction.
 
     x may be a positive int or Fraction.  base may be a positive int or
@@ -143,7 +143,7 @@ def Log(x, base=None) -> CF:
     return Ln(x) / Ln(base)
 
 
-def Log2(n) -> CF:
+def Log2(n: int | Fraction | CF) -> CF:
     """Logarithm base 2 of n, as a continued fraction.
 
     n may be a positive int or Fraction.

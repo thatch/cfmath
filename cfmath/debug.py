@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from typing import Iterator, TypeVar
+from typing import Any, Iterator
 
-T = TypeVar("T")
+from .core import CF
 
 
 class CountingIterator:
@@ -17,20 +17,20 @@ class CountingIterator:
     1
     """
 
-    def __init__(self, it: Iterator) -> None:
+    def __init__(self, it: Iterator[Any]) -> None:
         self._it = it
         self.count: int = 0
 
-    def __iter__(self) -> CountingIterator:
+    def __iter__(self) -> "CountingIterator":
         return self
 
-    def __next__(self):
+    def __next__(self) -> Any:
         val = next(self._it)
         self.count += 1
         return val
 
 
-def digits_with_debug(cf, base: int = 10) -> Iterator[tuple[int, int]]:
+def digits_with_debug(cf: CF, base: int = 10) -> Iterator[tuple[int, int]]:
     """Yield (digit, terms_consumed) pairs from a CF.
 
     Each pair is one base-B digit plus the count of CF terms consumed from

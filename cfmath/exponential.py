@@ -56,7 +56,7 @@ def _exp_terms_from_mpmath(x_num: int, x_den: int, n_terms: int) -> list[int]:
     return terms
 
 
-def Exp(x) -> CF:
+def Exp(x: int | Fraction | CF) -> CF:
     """e raised to the power x, as a continued fraction.
 
     x may be an int, Fraction, or CF.  Returns CF([1]) for x=0.
@@ -72,6 +72,7 @@ def Exp(x) -> CF:
         Exp(Fraction(3, 2) * Ln(2))  # 2^(3/2) ≈ [2; 1, 3, 1, 5, ...]
     """
     if isinstance(x, CF):
+        x_cf = x
 
         def _compute(n_terms: int) -> list[int]:
             import mpmath
@@ -81,7 +82,7 @@ def Exp(x) -> CF:
             from .convergents import convergent as _convergent
 
             depth = n_terms * 2 + 20
-            approx: Fraction = _convergent(x, depth)
+            approx: Fraction = _convergent(x_cf, depth)
             val = mpmath.exp(mpmath.mpf(approx.numerator) / mpmath.mpf(approx.denominator))
             terms: list[int] = []
             for _ in range(n_terms):

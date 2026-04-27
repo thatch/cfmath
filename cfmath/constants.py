@@ -40,7 +40,7 @@ def E() -> CF:
 # ---------------------------------------------------------------------------
 
 
-def _four_over_pi_gen():
+def _four_over_pi_gen() -> Iterator[tuple[int, int]]:
     b = 1
     a = 1
     while True:

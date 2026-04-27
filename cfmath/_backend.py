@@ -47,7 +47,7 @@ def _lazy_cf(
     return CF(static, _source=_more())
 
 
-def _coerce_trig_arg(x) -> Fraction:
+def _coerce_trig_arg(x: int | Fraction) -> Fraction:
     """Validate and coerce a trig/hyperbolic function argument to Fraction."""
     if isinstance(x, int):
         return Fraction(x)
