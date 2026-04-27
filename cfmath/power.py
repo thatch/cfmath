@@ -76,7 +76,7 @@ def Cuberoot(n: int) -> CF:
     return _lazy_cf(lambda n_terms: _cbrt_terms_from_decimal(n, n_terms), initial=80)
 
 
-def Pow(x, r) -> CF:
+def Pow(x: int | Fraction, r: int | Fraction) -> CF:
     """x raised to the rational power r, as a continued fraction.
 
     x may be a positive int or Fraction; r may be an int or Fraction.

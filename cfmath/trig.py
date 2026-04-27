@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from fractions import Fraction
+from typing import Iterator
 
 from ._backend import _coerce_trig_arg
 from .core import CF
@@ -12,7 +13,7 @@ from .core import CF
 # ---------------------------------------------------------------------------
 
 
-def _tan_pairs(x: Fraction):
+def _tan_pairs(x: Fraction) -> Iterator[tuple[int, Fraction]]:
     """Yield (b_n, a_{n+1}) pairs for the Lambert generalized CF of tan(x).
 
     tan(x) = x / (1 - x²/(3 - x²/(5 - x²/...)))
@@ -24,7 +25,7 @@ def _tan_pairs(x: Fraction):
         n += 1
 
 
-def _sin_pairs(x: Fraction):
+def _sin_pairs(x: Fraction) -> Iterator[tuple[Fraction, Fraction]]:
     """Yield (b_n, a_{n+1}) pairs for the generalized CF of sin(x)/x."""
     x2 = x * x
     yield (Fraction(1), x2)
@@ -35,7 +36,7 @@ def _sin_pairs(x: Fraction):
         k += 1
 
 
-def _cos_pairs(x: Fraction):
+def _cos_pairs(x: Fraction) -> Iterator[tuple[Fraction, Fraction]]:
     """Yield (b_n, a_{n+1}) pairs for the generalized CF of 1/cos(x)."""
     x2 = x * x
     yield (Fraction(1), x2)
@@ -98,7 +99,7 @@ def _tan_terms_mpmath(x_num: int, x_den: int, n_terms: int) -> list[int]:
 # ---------------------------------------------------------------------------
 
 
-def Tan(x) -> CF:
+def Tan(x: int | Fraction) -> CF:
     """Tangent of x (in radians), as a continued fraction.
 
     x may be an int or Fraction.  Returns CF([0]) for x=0.
@@ -117,7 +118,7 @@ def Tan(x) -> CF:
     return CF.from_rational(x) / denom_cf
 
 
-def Sin(x) -> CF:
+def Sin(x: int | Fraction) -> CF:
     """Sine of x (in radians), as a continued fraction.
 
     x may be an int or Fraction.  Returns CF([0]) for x=0.
@@ -135,7 +136,7 @@ def Sin(x) -> CF:
     return CF.from_rational(x) / CF.from_generalized_cf(_sin_pairs(x))
 
 
-def Cos(x) -> CF:
+def Cos(x: int | Fraction) -> CF:
     """Cosine of x (in radians), as a continued fraction.
 
     x may be an int or Fraction.  Returns CF([1]) for x=0.

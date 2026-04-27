@@ -175,7 +175,7 @@ def _arctanh_terms_mpmath(x_num: int, x_den: int, n_terms: int) -> list[int]:
 # ---------------------------------------------------------------------------
 
 
-def Arctanh(x) -> CF:
+def Arctanh(x: int | Fraction) -> CF:
     """Inverse hyperbolic tangent of x, as a continued fraction.
 
     x may be an int or Fraction; must satisfy |x| < 1.
@@ -200,7 +200,7 @@ def Arctanh(x) -> CF:
     return Ln(ratio) / CF.from_int(2)
 
 
-def Arcsinh(x) -> CF:
+def Arcsinh(x: int | Fraction) -> CF:
     """Inverse hyperbolic sine of x, as a continued fraction.
 
     x may be an int or Fraction.  Returns CF([0]) for x=0.
@@ -222,7 +222,7 @@ def Arcsinh(x) -> CF:
     return _lazy_cf(lambda n: _arcsinh_terms_from_decimal(num, den, n))
 
 
-def Arccosh(x) -> CF:
+def Arccosh(x: int | Fraction) -> CF:
     """Inverse hyperbolic cosine of x, as a continued fraction.
 
     x may be an int or Fraction; must satisfy x ≥ 1.

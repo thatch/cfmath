@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from fractions import Fraction
+from typing import Iterator
 
 from ._backend import _coerce_trig_arg
 from .core import CF
@@ -12,7 +13,7 @@ from .core import CF
 # ---------------------------------------------------------------------------
 
 
-def _arctan_pairs(x: Fraction):
+def _arctan_pairs(x: Fraction) -> Iterator[tuple[int, Fraction]]:
     """Yield (b_n, a_{n+1}) pairs for the Gauss generalized CF of arctan(x).
 
     arctan(x) = x / (1 + x²/(3 + (2x)²/(5 + (3x)²/(7 + ...))))
@@ -24,11 +25,11 @@ def _arctan_pairs(x: Fraction):
         k += 1
 
 
-def _arcsin_pairs(x: Fraction):
+def _arcsin_pairs(x: Fraction) -> Iterator[tuple[Fraction, Fraction]]:
     """Yield (b_n, a_{n+1}) pairs for the Euler generalized CF of arcsin(x)/x."""
     x2 = x * x
 
-    def _r(k):
+    def _r(k: int) -> Fraction:
         return Fraction((2 * k - 1) ** 2) * x2 / Fraction(2 * k * (2 * k + 1))
 
     yield (Fraction(1), -_r(1))
@@ -90,7 +91,7 @@ def _arccos_terms_mpmath(x_num: int, x_den: int, n_terms: int) -> list[int]:
 # ---------------------------------------------------------------------------
 
 
-def Arctan(x) -> CF:
+def Arctan(x: int | Fraction) -> CF:
     """Arctangent of x (in radians), as a continued fraction.
 
     x may be an int or Fraction.  Returns CF([0]) for x=0.
@@ -108,7 +109,7 @@ def Arctan(x) -> CF:
     return CF.from_rational(x) / CF.from_generalized_cf(_arctan_pairs(x))
 
 
-def Arcsin(x) -> CF:
+def Arcsin(x: int | Fraction) -> CF:
     """Arcsine of x (in radians), as a continued fraction.
 
     x may be an int or Fraction; must satisfy |x| ≤ 1.
@@ -129,7 +130,7 @@ def Arcsin(x) -> CF:
     return CF.from_rational(x) / CF.from_generalized_cf(_arcsin_pairs(x))
 
 
-def Arccos(x) -> CF:
+def Arccos(x: int | Fraction) -> CF:
     """Arccosine of x (in radians), as a continued fraction.
 
     x may be an int or Fraction; must satisfy |x| ≤ 1.
