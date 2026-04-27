@@ -56,6 +56,13 @@ class TestLn:
         result = float(convergent(Exp(Sqrt(2) * Ln(2)).take(15), 14))
         assert abs(result - 2 ** math.sqrt(2)) < 1e-8
 
+    def test_ln_cf_nonpositive_raises(self):
+        """Ln(CF) rejects zero and negative CFs eagerly."""
+        with pytest.raises(ValueError):
+            Ln(CF.from_int(0))
+        with pytest.raises(ValueError):
+            Ln(CF.from_int(-3))
+
     def test_ln_additivity(self):
         """ln(a*b) = ln(a) + ln(b) via CF arithmetic."""
         ln6 = Ln(6)

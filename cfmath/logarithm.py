@@ -91,6 +91,12 @@ def Ln(x: int | Fraction | CF) -> CF:
         Ln(Sqrt(2))  # = Ln(2)/2 ≈ [0; 2, 3, 1, 6, 3, 1, 1, 2, ...]
     """
     if isinstance(x, CF):
+        # Quick non-positive check from the first term alone.
+        # a0 < 0 → definitely negative; a0 == 0 with no further terms → zero.
+        a0 = x.terms[0]
+        if a0 < 0 or (a0 == 0 and not x.repeating and x._source is None and len(x.terms) == 1):
+            raise ValueError("Ln of non-positive number")
+
         def _compute(n_terms: int) -> list[int]:
             import mpmath
             mpmath.mp.dps = n_terms * 5 + 80
