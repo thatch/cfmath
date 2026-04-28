@@ -77,10 +77,7 @@ def _floor_quotient(x: CF, y: CF) -> int:
         # else: y bounds straddle zero (e.g. first convergent of a fraction in (0,1)
         # is 0); keep narrowing — true y != 0 will resolve on the next iteration.
 
-    raise ArithmeticError(
-        f"floor(x/y) did not converge after {_MAX_FLOOR_ITERS} iterations "
-        f"(x/y may be arbitrarily close to an integer)"
-    )
+    raise ArithmeticError(f"floor(x/y) did not converge after {_MAX_FLOOR_ITERS} iterations (x/y may be arbitrarily close to an integer)")
 
 
 def cf_floor(x: CF) -> CF:
@@ -90,6 +87,7 @@ def cf_floor(x: CF) -> CF:
     so this is O(1) for any CF — finite, periodic, or lazy.
     """
     from .core import CF as _CF
+
     return _CF.from_int(next(x._iter_from(0)))
 
 
@@ -102,6 +100,7 @@ def cf_ceil(x: CF) -> CF:
     so the floor of -x is always -(ceil x).
     """
     from .core import CF as _CF
+
     neg_x = -x
     return _CF.from_int(-next(neg_x._iter_from(0)))
 
@@ -109,6 +108,7 @@ def cf_ceil(x: CF) -> CF:
 def cf_floordiv(x: CF, y: CF) -> CF:
     """Return floor(x/y) as a finite CF."""
     from .core import CF as _CF
+
     return _CF.from_int(_floor_quotient(x, y))
 
 
@@ -121,5 +121,6 @@ def cf_mod(x: CF, y: CF) -> CF:
     avoiding a redundant intermediate lazy CF for x/y.
     """
     from .gosper import cf_homographic, cf_sub
+
     n = _floor_quotient(x, y)
     return cf_sub(x, cf_homographic(y, n, 0, 0, 1))

@@ -53,6 +53,7 @@ class TestLn:
     def test_ln_cf_pow(self):
         """2^sqrt(2) = Exp(Sqrt(2) * Ln(2)) — full pow(CF, CF) pipeline."""
         from cfmath.exponential import Exp
+
         result = float(convergent(Exp(Sqrt(2) * Ln(2)).take(15), 14))
         assert abs(result - 2 ** math.sqrt(2)) < 1e-8
 

@@ -15,6 +15,7 @@ def frac(p, q=1):
 # cf_floor
 # ---------------------------------------------------------------------------
 
+
 class TestCfFloor:
     def test_positive_integer(self):
         assert cf_floor(frac(7)) == frac(7)
@@ -43,6 +44,7 @@ class TestCfFloor:
 # ---------------------------------------------------------------------------
 # cf_ceil
 # ---------------------------------------------------------------------------
+
 
 class TestCfCeil:
     def test_positive_integer(self):
@@ -82,6 +84,7 @@ class TestCfCeil:
 # __trunc__
 # ---------------------------------------------------------------------------
 
+
 class TestTrunc:
     def test_positive(self):
         assert math.trunc(frac(7, 3)) == 2
@@ -96,6 +99,7 @@ class TestTrunc:
 # ---------------------------------------------------------------------------
 # cf_floordiv / __floordiv__
 # ---------------------------------------------------------------------------
+
 
 class TestCfFloordiv:
     def test_rational_rational(self):
@@ -123,6 +127,7 @@ class TestCfFloordiv:
 # ---------------------------------------------------------------------------
 # cf_mod / __mod__
 # ---------------------------------------------------------------------------
+
 
 class TestCfMod:
     def test_basic_rational(self):
@@ -173,6 +178,7 @@ class TestCfMod:
 # ---------------------------------------------------------------------------
 # divmod
 # ---------------------------------------------------------------------------
+
 
 class TestDivmod:
     def test_basic(self):

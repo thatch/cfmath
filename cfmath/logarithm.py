@@ -97,11 +97,15 @@ def Ln(x: int | Fraction | CF) -> CF:
         if a0 < 0 or (a0 == 0 and not x.repeating and x._source is None and len(x.terms) == 1):
             raise ValueError("Ln of non-positive number")
 
+        x_cf: CF = x
+
         def _compute(n_terms: int) -> list[int]:
             import mpmath
+
             mpmath.mp.dps = n_terms * 5 + 80
             from .convergents import convergent as _convergent
-            approx: Fraction = _convergent(x, n_terms * 2 + 20)
+
+            approx: Fraction = _convergent(x_cf, n_terms * 2 + 20)
             val = mpmath.log(mpmath.mpf(approx.numerator) / mpmath.mpf(approx.denominator))
             terms: list[int] = []
             for _ in range(n_terms):
@@ -109,6 +113,7 @@ def Ln(x: int | Fraction | CF) -> CF:
                 terms.append(a)
                 val = 1 / (val - a)
             return terms
+
         return _lazy_cf(_compute)
 
     if isinstance(x, int):
