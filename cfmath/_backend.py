@@ -3,13 +3,15 @@
 Provides:
   _HAS_MPMATH       — True if mpmath is importable
   _lazy_cf(fn)      — wrap a batch-compute function into a lazy CF
+  _extract_cf_terms — extract CF terms from an mpmath value until precision runs out
+  _mpmath_cf(fn)    — precision-automatic lazy CF from an mpmath value function
   _coerce_trig_arg  — validate and coerce int/Fraction inputs
 """
 
 from __future__ import annotations
 
 from fractions import Fraction
-from typing import Callable, Iterator
+from typing import Any, Callable, Iterator
 
 from .core import CF
 
@@ -45,6 +47,111 @@ def _lazy_cf(
             offset = len(more)
 
     return CF(static, _source=_more())
+
+
+def _extract_cf_terms(x: Any, guard_bits: int = 64) -> list[int]:
+    """Extract CF terms from an mpmath value until precision is exhausted.
+
+    After k extraction steps the effective precision is approximately
+    ``mp.prec - 2*log2(q_k)`` bits, where q_k is the k-th convergent denominator.
+    We stop before a step would push ``2*log2(q)`` past ``mp.prec - guard_bits``.
+
+    We track ``log2(q)`` cheaply via the identity
+    ``log2(q_{k+1}) ≈ log2(q_k) + log2(1/frac_k)``
+    (since ``a_{k+1} = floor(1/frac_k) ≈ 1/frac_k``).
+
+    This naturally accounts for large terms: π's term-4 value of 292 costs ~8 bits
+    without any per-constant tuning, and also catches exhaustion by many
+    moderate-sized terms (which a simple ``frac < threshold`` check misses).
+    """
+    import math
+
+    import mpmath
+
+    available = float(mpmath.mp.prec - guard_bits)
+    log_q = 0.0  # tracks log2 of the convergent denominator
+    terms: list[int] = []
+    while True:
+        a = int(mpmath.floor(x))
+        frac = x - a
+        terms.append(a)
+        if frac == 0:
+            break
+        f = float(frac)
+        if f == 0.0:
+            break  # underflows double — precision definitely gone
+        log_q -= math.log2(f)  # log2(1/frac) = -log2(frac)
+        if 2.0 * log_q > available:
+            break
+        x = 1 / frac
+    return terms
+
+
+def _mpmath_cf(
+    value_fn: Callable[[], Any],
+    initial_dps: int = 100,
+    scale: float = 2.0,
+    guard_bits: int = 64,
+) -> CF:
+    """Build a lazy CF from an mpmath value function with automatic precision management.
+
+    ``value_fn()`` is called with ``mp.dps`` already set; it should return the
+    mpmath value to convert (e.g. ``lambda: mpmath.euler``).
+
+    Always maintains two consecutive precision levels (lo and hi = lo × scale).
+    Only terms where lo and hi agree are emitted — the first disagreement is the
+    empirical precision boundary, so no per-constant tuning is needed and marginal
+    terms are automatically filtered.  When the consumer asks for more terms, hi
+    becomes the new lo and a fresh hi is computed at the next level.
+    """
+    import mpmath
+
+    def _get(dps: int) -> list[int]:
+        mpmath.mp.dps = dps
+        return _extract_cf_terms(value_fn(), guard_bits)
+
+    def _agree_up_to(a: list[int], b: list[int]) -> int:
+        """First index where a and b differ, or min(len(a), len(b)) if all agree."""
+        for i, (x, y) in enumerate(zip(a, b)):
+            if x != y:
+                return i
+        return min(len(a), len(b))
+
+    # Bootstrap: compute at two consecutive levels, emit only agreed terms.
+    lo = _get(initial_dps)
+    hi = _get(int(initial_dps * scale))
+    first_valid = _agree_up_to(lo, hi)
+
+    static = hi[: min(10, first_valid)] if first_valid else hi[:1]
+
+    def _source() -> Iterator[int]:
+        cur_lo = hi
+        cur_dps = int(initial_dps * scale)
+        emitted = len(static)
+
+        yield from cur_lo[emitted:first_valid]
+        emitted = first_valid
+
+        while True:
+            cur_dps = int(cur_dps * scale)
+            cur_hi = _get(cur_dps)
+            new_valid = _agree_up_to(cur_lo, cur_hi)
+
+            if new_valid < emitted:
+                raise ArithmeticError(
+                    f"CF term {new_valid} changed from {cur_lo[new_valid]} to "
+                    f"{cur_hi[new_valid]} at {cur_dps} dps — previously emitted "
+                    f"term is wrong"
+                )
+
+            new_terms = cur_hi[emitted:new_valid]
+            if new_terms:
+                yield from new_terms
+                emitted = new_valid
+
+            cur_lo = cur_hi
+
+    return CF(static, _source=_source())
 
 
 def _coerce_trig_arg(x: int | Fraction) -> Fraction:

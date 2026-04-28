@@ -151,9 +151,14 @@ class TestCatalan:
         assert abs(val - expected) < 1e-12
 
     def test_catalan_decimal_matches_mpmath(self):
-        from cfmath.constants import _catalan_terms_from_decimal, _catalan_terms_mpmath
+        import mpmath
 
-        assert _catalan_terms_from_decimal(30) == _catalan_terms_mpmath(30)
+        from cfmath._backend import _extract_cf_terms
+        from cfmath.constants import _catalan_terms_from_decimal
+
+        mpmath.mp.dps = 200
+        reference = _extract_cf_terms(mpmath.catalan)[:30]
+        assert _catalan_terms_from_decimal(30) == reference
 
 
 class TestApery:
@@ -169,9 +174,14 @@ class TestApery:
         assert abs(val - expected) < 1e-12
 
     def test_apery_decimal_matches_mpmath(self):
-        from cfmath.constants import _apery_terms_from_decimal, _apery_terms_mpmath
+        import mpmath
 
-        assert _apery_terms_from_decimal(30) == _apery_terms_mpmath(30)
+        from cfmath._backend import _extract_cf_terms
+        from cfmath.constants import _apery_terms_from_decimal
+
+        mpmath.mp.dps = 200
+        reference = _extract_cf_terms(mpmath.apery)[:30]
+        assert _apery_terms_from_decimal(30) == reference
 
 
 class TestPlastic:
@@ -194,9 +204,15 @@ class TestPlastic:
         assert residual < 1e-10
 
     def test_plastic_decimal_matches_mpmath(self):
-        from cfmath.constants import _plastic_terms, _plastic_terms_mpmath
+        import mpmath
 
-        assert _plastic_terms(30) == _plastic_terms_mpmath(30)
+        from cfmath._backend import _extract_cf_terms
+        from cfmath.constants import _plastic_terms
+
+        mpmath.mp.dps = 200
+        rho = mpmath.findroot(lambda z: z**3 - z - 1, mpmath.mpf("1.3"))
+        reference = _extract_cf_terms(rho)[:30]
+        assert _plastic_terms(30) == reference
 
 
 class TestKhinchin:
