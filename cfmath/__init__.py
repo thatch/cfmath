@@ -15,6 +15,7 @@ from .exponential import Exp
 from .gosper import cf_add, cf_div, cf_homographic, cf_max, cf_min, cf_mul, cf_sub
 from .hyperbolic import Cosh, Sinh, Tanh
 from .logarithm import Ln, Log, Log2, Log10
+from .mod import cf_ceil, cf_floor, cf_floordiv, cf_mod
 from .power import Cuberoot, Pow
 from .quadratic import Sqrt
 from .special import Gamma, Zeta
@@ -33,6 +34,10 @@ __all__ = [
     "cf_homographic",
     "cf_min",
     "cf_max",
+    "cf_floor",
+    "cf_ceil",
+    "cf_floordiv",
+    "cf_mod",
     "Sqrt",
     "Phi",
     "E",

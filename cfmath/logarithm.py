@@ -79,19 +79,47 @@ def _ln_terms_from_mpmath(x_num: int, x_den: int, n_terms: int) -> list[int]:
 def Ln(x: int | Fraction | CF) -> CF:
     """Natural logarithm of x.
 
-    x may be a positive int or Fraction.
+    x may be a positive int, Fraction, or CF.
     Uses ln(x) = 2·atanh((x-1)/(x+1)) with argument reduction when mpmath
     is unavailable, otherwise delegates to mpmath for speed.
+    CF inputs always require mpmath (used to evaluate a convergent).
 
     Examples::
 
-        Ln(2)   # ≈ [0; 1, 2, 3, 1, 6, 3, 1, 1, 2, ...]
-        Ln(3)   # ≈ [1; 10, 7, 9, 2, 2, 1, 3, 1, ...]
+        Ln(2)        # ≈ [0; 1, 2, 3, 1, 6, 3, 1, 1, 2, ...]
+        Ln(3)        # ≈ [1; 10, 7, 9, 2, 2, 1, 3, 1, ...]
+        Ln(Sqrt(2))  # = Ln(2)/2 ≈ [0; 2, 3, 1, 6, 3, 1, 1, 2, ...]
     """
+    if isinstance(x, CF):
+        # Quick non-positive check from the first term alone.
+        # a0 < 0 → definitely negative; a0 == 0 with no further terms → zero.
+        a0 = x.terms[0]
+        if a0 < 0 or (a0 == 0 and not x.repeating and x._source is None and len(x.terms) == 1):
+            raise ValueError("Ln of non-positive number")
+
+        x_cf: CF = x
+
+        def _compute(n_terms: int) -> list[int]:
+            import mpmath
+
+            mpmath.mp.dps = n_terms * 5 + 80
+            from .convergents import convergent as _convergent
+
+            approx: Fraction = _convergent(x_cf, n_terms * 2 + 20)
+            val = mpmath.log(mpmath.mpf(approx.numerator) / mpmath.mpf(approx.denominator))
+            terms: list[int] = []
+            for _ in range(n_terms):
+                a = int(mpmath.floor(val))
+                terms.append(a)
+                val = 1 / (val - a)
+            return terms
+
+        return _lazy_cf(_compute)
+
     if isinstance(x, int):
         x = Fraction(x)
     elif not isinstance(x, Fraction):
-        raise TypeError(f"Ln() expects int or Fraction, got {type(x).__name__}")
+        raise TypeError(f"Ln() expects int, Fraction, or CF, got {type(x).__name__}")
     if x <= 0:
         raise ValueError("Ln of non-positive number")
     if x == 1:

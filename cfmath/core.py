@@ -552,6 +552,43 @@ class CF:
 
         return cf_homographic(self, -1, 0, 0, 1)
 
+    def __floordiv__(self, other: object) -> "CF":
+        coerced = CF._coerce(other)
+        if coerced is None:
+            return NotImplemented
+        from .mod import cf_floordiv
+
+        return cf_floordiv(self, coerced)
+
+    def __mod__(self, other: object) -> "CF":
+        coerced = CF._coerce(other)
+        if coerced is None:
+            return NotImplemented
+        from .mod import cf_mod
+
+        return cf_mod(self, coerced)
+
+    def __divmod__(self, other: object) -> "tuple[CF, CF]":
+        coerced = CF._coerce(other)
+        if coerced is None:
+            return NotImplemented
+        from .gosper import cf_homographic, cf_sub
+        from .mod import _floor_quotient
+
+        n = _floor_quotient(self, coerced)
+        return CF.from_int(n), cf_sub(self, cf_homographic(coerced, n, 0, 0, 1))
+
+    def __floor__(self) -> int:
+        return next(self._iter_from(0))
+
+    def __ceil__(self) -> int:
+        return -next((-self)._iter_from(0))
+
+    def __trunc__(self) -> int:
+        f = next(self._iter_from(0))
+        # For negative non-integers, trunc rounds toward zero (= ceil)
+        return f if f >= 0 else -next((-self)._iter_from(0))
+
     def __pow__(self, n: int) -> CF:
         if not isinstance(n, int):
             return NotImplemented
