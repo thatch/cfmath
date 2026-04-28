@@ -552,24 +552,54 @@ class CF:
 
         return cf_homographic(self, -1, 0, 0, 1)
 
-    def __pow__(self, n: int) -> CF:
-        if not isinstance(n, int):
-            return NotImplemented
-        if n == 0:
-            return CF.from_int(1)
-        if n == 1:
-            return self
-        if n < 0:
-            return CF.from_int(1) / (self ** (-n))
-        # repeated squaring
-        result = None
-        base = self
-        while n:
-            if n & 1:
-                result = base if result is None else result * base
-            base = base * base
-            n >>= 1
-        return result  # type: ignore[return-value]  # n>=2 guarantees result is set
+    def __pow__(self, n: int | Fraction | CF) -> CF:
+        if isinstance(n, int):
+            if n == 0:
+                return CF.from_int(1)
+            if n == 1:
+                return self
+            if n < 0:
+                return CF.from_int(1) / (self ** (-n))
+            # repeated squaring
+            result = None
+            base = self
+            while n:
+                if n & 1:
+                    result = base if result is None else result * base
+                base = base * base
+                n >>= 1
+            return result  # type: ignore[return-value]  # n>=2 guarantees result is set
+
+        if isinstance(n, Fraction):
+            from .power import Pow
+
+            if self.is_finite():
+                return Pow(self.to_fraction(), n)
+            from .exponential import Exp
+            from .logarithm import Ln
+
+            return Exp(CF.from_rational(n) * Ln(self))
+
+        if isinstance(n, CF):
+            from .exponential import Exp
+            from .logarithm import Ln
+
+            return Exp(n * Ln(self))
+
+        return NotImplemented
+
+    def __rpow__(self, other: int | Fraction) -> CF:
+        """Support int ** CF and Fraction ** CF (e.g. 2 ** Pi())."""
+        if isinstance(other, int):
+            other = Fraction(other)
+        if isinstance(other, Fraction):
+            if other <= 0:
+                raise ValueError(f"base must be positive for CF exponent, got {other}")
+            from .exponential import Exp
+            from .logarithm import Ln
+
+            return Exp(self * Ln(other))
+        return NotImplemented
 
     def __radd__(self, other: int | Fraction) -> CF:
         return CF.from_rational(Fraction(other)) + self

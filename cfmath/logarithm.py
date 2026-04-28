@@ -76,22 +76,48 @@ def _ln_terms_from_mpmath(x_num: int, x_den: int, n_terms: int) -> list[int]:
     return terms
 
 
+def _ln_terms_from_cf(x: CF, n_terms: int) -> list[int]:
+    """Compute n_terms CF terms of ln(x) where x is a CF, using mpmath."""
+    import mpmath
+
+    from .convergents import convergent as _convergent
+
+    dps = n_terms * 4 + 50
+    mpmath.mp.dps = dps
+    depth = n_terms * 2 + 20
+    approx: Fraction = _convergent(x, depth)
+    if approx <= 0:
+        raise ValueError("Ln of non-positive number")
+    val = mpmath.log(mpmath.mpf(approx.numerator) / mpmath.mpf(approx.denominator))
+    terms: list[int] = []
+    for _ in range(n_terms):
+        a = int(mpmath.floor(val))
+        terms.append(a)
+        val = 1 / (val - a)
+    return terms
+
+
 def Ln(x: int | Fraction | CF) -> CF:
     """Natural logarithm of x.
 
-    x may be a positive int or Fraction.
+    x may be a positive int, Fraction, or CF.
     Uses ln(x) = 2·atanh((x-1)/(x+1)) with argument reduction when mpmath
     is unavailable, otherwise delegates to mpmath for speed.
+    CF inputs always require mpmath.
 
     Examples::
 
-        Ln(2)   # ≈ [0; 1, 2, 3, 1, 6, 3, 1, 1, 2, ...]
-        Ln(3)   # ≈ [1; 10, 7, 9, 2, 2, 1, 3, 1, ...]
+        Ln(2)        # ≈ [0; 1, 2, 3, 1, 6, 3, 1, 1, 2, ...]
+        Ln(3)        # ≈ [1; 10, 7, 9, 2, 2, 1, 3, 1, ...]
+        Ln(Sqrt(2))  # ≈ [0; 2, 1, 2, 1, 4, 1, ...]  (= ln(2)/2)
     """
+    if isinstance(x, CF):
+        x_cf: CF = x
+        return _lazy_cf(lambda n: _ln_terms_from_cf(x_cf, n))
     if isinstance(x, int):
         x = Fraction(x)
     elif not isinstance(x, Fraction):
-        raise TypeError(f"Ln() expects int or Fraction, got {type(x).__name__}")
+        raise TypeError(f"Ln() expects int, Fraction, or CF, got {type(x).__name__}")
     if x <= 0:
         raise ValueError("Ln of non-positive number")
     if x == 1:
