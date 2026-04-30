@@ -319,9 +319,13 @@ def _bihomographic_terms(
 
 
 def _corner_val(num: int, den: int) -> float:
-    """Safe float value of num/den for spread calculations."""
+    """Safe float value of num/den for spread calculations.
+
+    Returns `float("inf")` for all infinite results, never `float("-inf")`
+    (There is only one inifinty in projective space P^1.)
+    """
     if den == 0:
-        return float("inf") if num >= 0 else float("-inf")
+        return float("inf")
     return num / den
 
 
