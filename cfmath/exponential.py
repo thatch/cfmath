@@ -87,9 +87,13 @@ def ExpCF(x: CF, mode=None) -> CF:
 
     Only continued fraction computation is used in the backend.
 
-    TODO: Test performance heavily, then merge with Exp.
+    TODO: Test heavily, then merge in features from ExpMP.
     """
-    #TODO: Test heavily, then merge with Exp.
+    #TODO: Test heavily, then merge in features from ExpMP.
+
+    x = CF._coerce(x)
+    if x is None:
+        raise TypeError("Unable to coerce x to CF")
 
     if x == CF.from_int(0):
         # I can do this one in my head.
@@ -125,7 +129,7 @@ def test_ExpCF(mode=None):
     assert E() == ExpCF(CF.from_int(1))
     for val in (1/Sqrt(2), Sqrt(2), Pi(), EulerGamma() + Pi() + Sqrt(2)):
         y0 = Exp(val).take(80).terms
-        y1 = ExpCF(val).take(80).terms
+        y1 = ExpCF(val, mode).take(80).terms
         assert y0 == y1
     from timeit import timeit
     n = 1000
@@ -140,7 +144,7 @@ def test_ExpCF(mode=None):
         print(f'{(t1-t0)/t0:6.0%} ({t1:.0f}s) time taken for ExpCF(Pi) for {n=} runs')
 
 
-def Exp(x: int | Fraction | CF) -> CF:
+def ExpMP(x: int | Fraction | CF) -> CF:
     """e raised to the power x, as a continued fraction.
 
     x may be an int, Fraction, or CF.  Returns CF([1]) for x=0.
@@ -184,3 +188,6 @@ def Exp(x: int | Fraction | CF) -> CF:
     if _HAS_MPMATH:
         return _lazy_cf(lambda n: _exp_terms_from_mpmath(num, den, n))
     return _lazy_cf(lambda n: _exp_terms_from_decimal(num, den, n))
+
+Exp = ExpCF #TODO: Move into .core or wherever default behavior is selected
+# The line is here for now for selecting which to run `make test` on.
