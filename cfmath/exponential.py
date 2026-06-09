@@ -128,18 +128,18 @@ def test_ExpCF(mode=None):
     from .quadratic import Sqrt
     assert E() == ExpCF(CF.from_int(1))
     for val in (1/Sqrt(2), Sqrt(2), Pi(), EulerGamma() + Pi() + Sqrt(2)):
-        y0 = Exp(val).take(80).terms
+        y0 = ExpMP(val).take(80).terms
         y1 = ExpCF(val, mode).take(80).terms
         assert y0 == y1
     from timeit import timeit
     n = 1000
     setup = 'from cfmath import Pi, exponential; pi = Pi(); pi.take(20)'
     if mode is None:
-        t0 = timeit('exponential.Exp(pi).take(20)', setup, number=n)
+        t0 = timeit('exponential.ExpMP(pi).take(20)', setup, number=n)
         t1 = timeit('exponential.ExpCF(pi).take(20)', setup, number=n)
         print(f'{(t1-t0)/t0:6.0%} ({t1:.0f}s) time taken for ExpCF(Pi) for {n=} runs')
     if mode == 'simple':
-        t0 = timeit('exponential.Exp(pi).take(20)', setup, number=n)
+        t0 = timeit('exponential.ExpMP(pi).take(20)', setup, number=n)
         t1 = timeit('exponential.ExpCF(pi, "simple").take(20)', setup, number=n)
         print(f'{(t1-t0)/t0:6.0%} ({t1:.0f}s) time taken for ExpCF(Pi) for {n=} runs')
 
@@ -189,5 +189,5 @@ def ExpMP(x: int | Fraction | CF) -> CF:
         return _lazy_cf(lambda n: _exp_terms_from_mpmath(num, den, n))
     return _lazy_cf(lambda n: _exp_terms_from_decimal(num, den, n))
 
-Exp = ExpCF #TODO: Move into .core or wherever default behavior is selected
+Exp = ExpMP #TODO: Move into .core or wherever default behavior is selected
 # The line is here for now for selecting which to run `make test` on.
