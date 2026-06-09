@@ -46,7 +46,8 @@ Bill Gosper, HAKMEM, MIT AI Memo 239, 1972, items 101-101B.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Iterator, Callable
+from fractions import Fraction
+from typing import TYPE_CHECKING, Callable, Iterator
 
 from .quadratic import _periodic_mul, _periodic_square
 
@@ -419,23 +420,28 @@ def _bihomographic(x: CF, y: CF, a: int, b: int, c: int, d: int, e: int, f: int,
 # This first implementation runs very slowly,
 # but is a good sketch of the control flow or intention of metaCF.
 
-def _metaCF_simple_terms(x: CF, F_iter: Iterator[Callable[[CF], CF]]) -> CF:
+
+def _metaCF_simple_terms(x: CF, F_iter: Iterator[Callable[[CF], CF]]) -> Iterator[int]:
+    from .core import CF as _CF
+
+    one = _CF.from_int(1)
+    zero = _CF.from_int(0)
+    stall = 0
     F_done = False
     t = next(F_iter)(x)
-    a, b, c, d = t, 1, 1, 0
+    a, b, c, d = t, one, one, zero
     while True:
-
-        n0 = (a/c).take(1).terms[0]
-        n1 = ((a+b)/(c+d)).take(1).terms[0]
+        n0 = (a / c).take(1).terms[0]
+        n1 = ((a + b) / (c + d)).take(1).terms[0]
         if n0 == n1:
             yield n0
             # Subtract n0, take reciprocal:
-            a, b, c, d = c, d, a-n0*c, b-n0*d
+            a, b, c, d = c, d, a - n0 * c, b - n0 * d
             continue
 
         if F_done:
             # F exhausted: tail F' → ∞, value is a/c
-            yield from a/c
+            yield from a / c
             return
 
         try:
@@ -446,7 +452,11 @@ def _metaCF_simple_terms(x: CF, F_iter: Iterator[Callable[[CF], CF]]) -> CF:
             continue
 
         # Ingest: substitute F = t + 1/F'
-        a, b, c, d = b+a*t, a, d+c*t, c
+        a, b, c, d = b + a * t, a, d + c * t, c
+
+        stall += 1
+        if stall >= _MAX_STALL // 50:
+            return
 
 
 def cf_metaCF_simple(x: CF, F_iter: Iterator[Callable[[CF], CF]]) -> CF:
@@ -475,9 +485,10 @@ def _metaCF_terms(x: CF, F_iter: Iterator[list[int]]) -> Iterator[int]:
 
     from .core import CF as _CF
 
-    pow_cache = {}
+    int_pow_cache: dict[int, list[int]] = {}
+    cf_pow_cache: dict[CF, list[CF]] = {}
 
-    def pfeval_simple(coeffs, inp, n) -> int:
+    def pfeval_simple(coeffs: list[int], inp: Fraction, n: int) -> int:
         """Evaluate polynomial with coeffs at inp, times denom**n.
 
         inp is a fraction with denominator denom
@@ -490,44 +501,42 @@ def _metaCF_terms(x: CF, F_iter: Iterator[list[int]]) -> Iterator[int]:
         for i in range(len(coeffs)):
             if coeffs[i] == 0:
                 continue
-            out += coeffs[i] * numer**i * denom**(n-i)
+            out += coeffs[i] * numer**i * denom ** (n - i)
         return out
 
-    def pfeval_large_cache(coeffs, inp, n, debug=False) -> int:
+    def pfeval_large_cache(coeffs: list[int], inp: Fraction, n: int) -> int:
         """Evaluate polynomial with coeffs at inp, times denom**n.
 
         inp is a fraction numer/denom.
         Caches powers of numer, denom across runs of peval.
         """
         if len(coeffs) == 0:
-            return None
+            raise ValueError("coeffs must be nonempty")
 
         numer = inp.numerator
         denom = inp.denominator
 
-        n_cache = pow_cache.setdefault(numer, [1, numer])
-        d_cache = pow_cache.setdefault(denom, [1, denom])
+        n_cache = int_pow_cache.setdefault(numer, [1, numer])
+        d_cache = int_pow_cache.setdefault(denom, [1, denom])
 
         di = 1
-        for i in range(len(d_cache), n+1):
-
-            d_cache.append(d_cache[di]*d_cache[i-di])
-            if i == 2*di:
+        for i in range(len(d_cache), n + 1):
+            d_cache.append(d_cache[di] * d_cache[i - di])
+            if i == 2 * di:
                 di = i
 
         di = 1
         out = 0
         for i in range(len(coeffs)):
-
             if i == len(n_cache):
-                n_cache.append(n_cache[di]*n_cache[i-di])
-                if i == 2*di:
+                n_cache.append(n_cache[di] * n_cache[i - di])
+                if i == 2 * di:
                     di = i
 
             if coeffs[i] == 0:
                 continue
 
-            out += coeffs[i] * n_cache[i] * d_cache[n-i]
+            out += coeffs[i] * n_cache[i] * d_cache[n - i]
 
         return out
 
@@ -536,31 +545,30 @@ def _metaCF_terms(x: CF, F_iter: Iterator[list[int]]) -> Iterator[int]:
     # peval_small_cache and peval_large_cache,
     # depending on which implementation was used in CF.__pow__
     # and the cache would be shared across all plug-ins of x.
-    def peval_simple(coeffs, inp):
+    def peval_simple(coeffs: list[int], inp: CF) -> CF:
         """Evaluate polynomial with coeffs at inp."""
-        out = 0
-        for i in range(len(coeffs)):
+        out = _CF.from_int(coeffs[0])
+        for i in range(1, len(coeffs)):
             if coeffs[i] == 0:
                 continue
             out += coeffs[i] * inp**i
         return out
 
-    def peval_small_cache(coeffs, inp):
+    def peval_small_cache(coeffs: list[int], inp: CF) -> CF:
         """Evaluate polynomial with coeffs at inp.
 
         Caches binary powers of inp during computation, then discards.
         """
         if len(coeffs) == 0:
-            return None
+            raise ValueError("coeffs must be nonempty")
 
         cache = [inp]
 
         i2 = 1 << len(cache)
-        out = coeffs[0]
+        out = _CF.from_int(coeffs[0])
         for i in range(1, len(coeffs)):
-
             if i == i2:
-                cache.append(cache[-1]**2)
+                cache.append(cache[-1] ** 2)
                 i2 <<= 1
 
             if coeffs[i] == 0:
@@ -572,28 +580,28 @@ def _metaCF_terms(x: CF, F_iter: Iterator[list[int]]) -> Iterator[int]:
                 if n & 1:
                     power = cache[j] if power is None else power * cache[j]
                 n >>= 1
+            assert power is not None, f"{i=} nonzero should imply {power=} not None"
 
             out += coeffs[i] * power
 
         return out
 
-    def peval_large_cache(coeffs, inp):
+    def peval_large_cache(coeffs: list[int], inp: CF) -> CF:
         """Evaluate polynomial with coeffs at inp.
 
         Caches powers of inp across runs of peval.
         """
         if len(coeffs) == 0:
-            return None
+            raise ValueError("coeffs must be nonempty")
 
-        cache = pow_cache.setdefault(inp, [1, inp])
+        cache = cf_pow_cache.setdefault(inp, [_CF.from_int(1), inp])
 
         di = 1
-        out = coeffs[0]
+        out = _CF.from_int(coeffs[0])
         for i in range(1, len(coeffs)):
-
             if i == len(cache):
-                cache.append(cache[di]*cache[i-di])
-                if i == 2*di:
+                cache.append(cache[di] * cache[i - di])
+                if i == 2 * di:
                     di = i
 
             if coeffs[i] == 0:
@@ -614,7 +622,7 @@ def _metaCF_terms(x: CF, F_iter: Iterator[list[int]]) -> Iterator[int]:
     # pfeval avoids fractions by returning the eval times denom**n, an integer.
     pfeval = pfeval_simple
 
-    def padd(coeffs0, coeffs1):
+    def padd(coeffs0: list[int], coeffs1: list[int]) -> list[int]:
         """Add polynomials with coeffs0 and coeffs1."""
         coeffs0, coeffs1 = sorted((coeffs0, coeffs1), key=len)
         out = coeffs1.copy()
@@ -622,12 +630,12 @@ def _metaCF_terms(x: CF, F_iter: Iterator[list[int]]) -> Iterator[int]:
             out[i] += coeffs0[i]
         return out
 
-    def pmul(coeffs0, coeffs1):
+    def pmul(coeffs0: list[int], coeffs1: list[int]) -> list[int]:
         """Multiply polynomials with coeffs0 and coeffs1."""
-        out = [0]*(len(coeffs0) + len(coeffs1) - 1)
+        out = [0] * (len(coeffs0) + len(coeffs1) - 1)
         for i in range(len(coeffs0)):
             for j in range(len(coeffs1)):
-                out[i+j] += coeffs0[i] * coeffs1[j]
+                out[i + j] += coeffs0[i] * coeffs1[j]
         return out
 
     x_i = 1
@@ -640,9 +648,7 @@ def _metaCF_terms(x: CF, F_iter: Iterator[list[int]]) -> Iterator[int]:
     n = max(len(t), 1) - 1
 
     while True:
-
         if x_CHANGED:
-
             # TODO: move to a CF.interval(x_i) method
             x0 = x.take(x_i)
             q0 = x0.to_fraction()
@@ -651,9 +657,9 @@ def _metaCF_terms(x: CF, F_iter: Iterator[list[int]]) -> Iterator[int]:
             else:
                 x1 = _CF(x0.terms[:-1] + [x0.terms[-1] + 1])
                 q1 = x1.to_fraction()
-                if not(x_i & 1):
+                if not (x_i & 1):
                     q0, q1 = q1, q0
-            assert q0 <= q1 # TODO: move to testing
+            assert q0 <= q1  # TODO: move to testing
 
             a0 = pfeval(a, q0, n)
             b0 = pfeval(b, q0, n)
@@ -681,12 +687,12 @@ def _metaCF_terms(x: CF, F_iter: Iterator[list[int]]) -> Iterator[int]:
             stall = 0
             # Subtract n, take reciprocal: (a,b,c,d) → (c, d, a-nc, b-nd)
             a, b, c, d = c, d, padd(a, pmul([-nn], c)), padd(b, pmul([-nn], d))
-            a0, b0, c0, d0 = c0, d0, a0 - nn*c0, b0 - nn*d0
+            a0, b0, c0, d0 = c0, d0, a0 - nn * c0, b0 - nn * d0
             n0 = _homo_output_simple(a0, b0, c0, d0)
             if q0 == q1:
                 a1, b1, c1, d1, n1 = a0, b0, c0, d0, n0
             else:
-                a1, b1, c1, d1 = c1, d1, a1 - nn*c1, b1 - nn*d1
+                a1, b1, c1, d1 = c1, d1, a1 - nn * c1, b1 - nn * d1
                 n1 = _homo_output_simple(a1, b1, c1, d1)
             continue
 
@@ -703,13 +709,14 @@ def _metaCF_terms(x: CF, F_iter: Iterator[list[int]]) -> Iterator[int]:
             if c0 == 0:
                 return
             from .core import CF as _CF
-            q = a0/c0
+
+            q = Fraction(a0, c0)
             yield from _CF.from_fraction(q.numerator, q.denominator)
             return
 
         if F_done:
             # F exhausted: tail F' → ∞, value is a/c: CF computed with gosper
-            yield from peval(a, x)/peval(c, x)
+            yield from peval(a, x) / peval(c, x)
             return
 
         try:
@@ -721,22 +728,22 @@ def _metaCF_terms(x: CF, F_iter: Iterator[list[int]]) -> Iterator[int]:
 
         # Ingest: substitute F = t + 1/F'
         a, b, c, d = padd(b, pmul(t, a)), a, padd(d, pmul(t, c)), c
-        dn = len(t)-1
+        dn = len(t) - 1
         n += dn
-        tt = q0.denominator**dn # Equal to pfeval([1], q0, dn)
+        tt = q0.denominator**dn  # Equal to pfeval([1], q0, dn)
         t0 = pfeval(t, q0, dn)
-        a0, b0, c0, d0 = tt*b0 + t0*a0, tt*a0, tt*d0 + t0*c0, tt*c0
+        a0, b0, c0, d0 = tt * b0 + t0 * a0, tt * a0, tt * d0 + t0 * c0, tt * c0
         n0 = _homo_output_simple(a0, b0, c0, d0)
         if q0 == q1:
             a1, b1, c1, d1, n1 = a0, b0, c0, d0, n0
         else:
-            tt = q1.denominator**dn # Equal to pfeval([1], q1, dn)
+            tt = q1.denominator**dn  # Equal to pfeval([1], q1, dn)
             t1 = pfeval(t, q1, dn)
-            a1, b1, c1, d1 = tt*b1 + t1*a1, tt*a1, tt*d1 + t1*c1, tt*c1
+            a1, b1, c1, d1 = tt * b1 + t1 * a1, tt * a1, tt * d1 + t1 * c1, tt * c1
             n1 = _homo_output_simple(a1, b1, c1, d1)
 
         stall += 1
-        if stall >= _MAX_STALL//10:
+        if stall >= _MAX_STALL // 10:
             return
 
 

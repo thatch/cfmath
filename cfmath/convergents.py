@@ -22,8 +22,8 @@ if TYPE_CHECKING:
 
 def convergent_pairs(cf: CF) -> Iterator[tuple[int, int]]:
     """Yield (numerator, denominator) pairs for every convergent of *cf*, lazily."""
-    p_prev, p_curr = 0, 1   # p_{-2}=0, p_{-1}=1
-    q_prev, q_curr = 1, 0   # q_{-2}=1, q_{-1}=0
+    p_prev, p_curr = 0, 1  # p_{-2}=0, p_{-1}=1
+    q_prev, q_curr = 1, 0  # q_{-2}=1, q_{-1}=0
 
     for a in cf:
         p_curr, p_prev = a * p_curr + p_prev, p_curr
