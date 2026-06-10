@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 from fractions import Fraction
+from typing import Callable, Iterator
 
 from ._backend import _HAS_MPMATH, _coerce_trig_arg, _lazy_cf
+from .constants import E
 from .core import CF
 
 
@@ -56,7 +58,101 @@ def _exp_terms_from_mpmath(x_num: int, x_den: int, n_terms: int) -> list[int]:
     return terms
 
 
-def Exp(x: int | Fraction | CF) -> CF:
+def _halfexpm1_metaCF_simple_terms() -> Iterator[Callable[[CF], CF]]:
+    """Return metaCF for (Exp(1/z) - 1)/2 = [2z-1; 6z, 10z, 14z, ...]
+
+    Efficient convergence guaranteed for z in [1, ∞].
+    """
+    k = 2
+    yield lambda x: k * x - 1
+    while True:
+        k += 4
+        yield lambda x: k * x
+
+
+def _halfexpm1_metaCF_terms() -> Iterator[list[int]]:
+    """Return metaCF for (Exp(1/z) - 1)/2 = [2z-1; 6z, 10z, 14z, ...]
+
+    Efficient convergence guaranteed for z in [1, ∞].
+    """
+    k = 2
+    yield [-1, k]
+    while True:
+        k += 4
+        yield [0, k]
+
+
+def ExpCF(x: CF, mode: str | None = None) -> CF:
+    """e raised to the power x, as a continued fraction.
+
+    Only continued fraction computation is used in the backend.
+
+    TODO: Test heavily, then merge in features from ExpMP.
+    """
+    # TODO: Test heavily, then merge in features from ExpMP.
+
+    modes = (None, "simple")
+    if mode not in modes:
+        raise ValueError("mode must be one of: {modes}")
+
+    x_coerced = CF._coerce(x)
+    if x_coerced is None:
+        raise TypeError("Unable to coerce x to CF")
+    x = x_coerced
+
+    if x == CF.from_int(0):
+        # I can do this one in my head.
+        return CF.from_int(1)
+
+    x0 = x.take(1).terms[0]
+    if x0 != 0:
+        # Handle integer part of x separately.
+        # That is, Exp([x0; ...])
+        #        = Exp(x0 + [0; ...])
+        #        = Exp(x0) * Exp([0; ...])
+        #        = e**x0   * Exp([0; ...])
+        return E() ** x0 * ExpCF(x - x0, mode=mode)
+
+    from .gosper import cf_metaCF, cf_metaCF_simple
+
+    # Use metaCF for Exp(1/x) for the remainder.
+    # That is, since x is in (0, 1), we can compute
+    #   z = 1/x = [x1; x2, x3, ...]
+    # and then plug that into the metaCF within:
+    #   Exp(1/z) = 1 + 2/[2z-1; 6z, 10z, 14z, ...]
+    # and it will converge efficiently with z and each term in (1, ∞)
+    if mode is None:
+        return 1 + 2 / cf_metaCF(1 / x, _halfexpm1_metaCF_terms())
+    if mode == "simple":
+        return 1 + 2 / cf_metaCF_simple(1 / x, _halfexpm1_metaCF_simple_terms())
+    assert False
+
+
+# TODO: Move to tests
+def test_ExpCF(mode: None = None) -> None:
+    from .constants import EulerGamma, Pi
+    from .quadratic import Sqrt
+
+    assert E() == ExpCF(CF.from_int(1))
+    for val in (1 / Sqrt(2), Sqrt(2), Pi(), EulerGamma() + Pi() + Sqrt(2)):
+        y0 = ExpMP(val).take(80).terms
+        y1 = ExpCF(val, mode).take(80).terms
+        assert y0 == y1
+    from timeit import timeit
+
+    n = 1000
+    setup = "from cfmath import Pi, exponential; pi = Pi(); pi.take(20)"
+    if mode is None:
+        t0 = timeit("exponential.ExpMP(pi).take(20)", setup, number=n)
+        t1 = timeit("exponential.ExpCF(pi).take(20)", setup, number=n)
+        print(f"{(t1 - t0) / t0:6.0%} ({t1:.0f}s) time taken for ExpCF(Pi) for {n=} runs")
+    if mode == "simple":
+        t0 = timeit("exponential.ExpMP(pi).take(20)", setup, number=n)
+        t1 = timeit('exponential.ExpCF(pi, "simple").take(20)', setup, number=n)
+        print(f"{(t1 - t0) / t0:6.0%} ({t1:.0f}s) time taken for ExpCF(Pi) for {n=} runs")
+
+
+def ExpMP(x: int | Fraction | CF) -> CF:
     """e raised to the power x, as a continued fraction.
 
     x may be an int, Fraction, or CF.  Returns CF([1]) for x=0.
@@ -100,3 +196,7 @@ def Exp(x: int | Fraction | CF) -> CF:
     if _HAS_MPMATH:
         return _lazy_cf(lambda n: _exp_terms_from_mpmath(num, den, n))
     return _lazy_cf(lambda n: _exp_terms_from_decimal(num, den, n))
+
+
+Exp = ExpMP  # TODO: Move into .core or wherever default behavior is selected
+# The line is here for now for selecting which to run `make test` on.
