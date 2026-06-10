@@ -612,174 +612,214 @@ def cf_metaCF_simple(x: CF, F_iter: Iterator[Callable[[CF], CF]]) -> CF:
     return _CF([], _source=_metaCF_simple_terms(x, F_iter))
 
 
+def _poly_eval(coeffs: list[int], inp):
+    """Evaluate a low-to-high polynomial at inp."""
+    out = 0
+    for i, coeff in enumerate(coeffs):
+        if coeff:
+            out += coeff * inp**i
+    return out
+
+
+def _poly_eval_scaled(coeffs: list[int], p: int, q: int, degree: int) -> int:
+    """Evaluate poly(p/q) * q**degree without constructing a Fraction."""
+    if len(coeffs) == 1:
+        return coeffs[0] * q**degree
+    if degree == 1:
+        return coeffs[0] * q + coeffs[1] * p
+
+    out = 0
+    for i, coeff in enumerate(coeffs):
+        if coeff:
+            out += coeff * p**i * q**(degree - i)
+    return out
+
+
+def _poly_add(coeffs0: list[int], coeffs1: list[int]) -> list[int]:
+    """Add low-to-high polynomials."""
+    coeffs0, coeffs1 = sorted((coeffs0, coeffs1), key=len)
+    out = list(coeffs1)
+    for i, coeff in enumerate(coeffs0):
+        out[i] += coeff
+    return out
+
+
+def _poly_mul(coeffs0: list[int], coeffs1: list[int]) -> list[int]:
+    """Multiply low-to-high polynomials."""
+    if len(coeffs0) == 1:
+        k = coeffs0[0]
+        if k == 0:
+            return [0]
+        if k == 1:
+            return list(coeffs1)
+        return [k * c for c in coeffs1]
+    if len(coeffs1) == 1:
+        k = coeffs1[0]
+        if k == 0:
+            return [0]
+        if k == 1:
+            return list(coeffs0)
+        return [k * c for c in coeffs0]
+
+    nonzero0 = [i for i, c in enumerate(coeffs0) if c != 0]
+    if len(nonzero0) == 1:
+        shift = nonzero0[0]
+        k = coeffs0[shift]
+        return [0] * shift + [k * c for c in coeffs1]
+
+    nonzero1 = [i for i, c in enumerate(coeffs1) if c != 0]
+    if len(nonzero1) == 1:
+        shift = nonzero1[0]
+        k = coeffs1[shift]
+        return [0] * shift + [k * c for c in coeffs0]
+
+    out = [0] * (len(coeffs0) + len(coeffs1) - 1)
+    for i in nonzero0:
+        c0 = coeffs0[i]
+        for j in nonzero1:
+            out[i + j] += c0 * coeffs1[j]
+    return out
+
+
+def _meta_emit_value(
+    a: int, b: int, c: int, d: int, term: int
+) -> tuple[int, int, int, int]:
+    """Subtract term from a homographic state and invert the tail."""
+    return c, d, a - term * c, b - term * d
+
+
+def _meta_ingest_values(
+    a: int,
+    b: int,
+    c: int,
+    d: int,
+    b_term: int,
+    a_term: int,
+    scale: int,
+) -> tuple[int, int, int, int]:
+    """Ingest F = b(x) + a(x)/F' into scalar endpoint state."""
+    return (
+        b_term * a + scale * b,
+        a_term * a,
+        b_term * c + scale * d,
+        a_term * c,
+    )
+
+
+def _metaCF_replay_state(
+    terms: list[tuple[list[int], int]],
+    emits: list[tuple[int, int]],
+    p: int,
+    q: int,
+) -> tuple[int, int, int, int]:
+    """Replay simple meta-CF terms at p/q using only integer arithmetic."""
+    if not terms:
+        return 0, 0, 1, 0
+
+    term, degree = terms[0]
+    scale = q**degree
+    a = _poly_eval_scaled(term, p, q, degree)
+    b = scale
+    c = scale
+    d = 0
+
+    emit_idx = 0
+    while emit_idx < len(emits) and emits[emit_idx][0] == 1:
+        a, b, c, d = _meta_emit_value(a, b, c, d, emits[emit_idx][1])
+        emit_idx += 1
+
+    for term_idx in range(1, len(terms)):
+        term, degree = terms[term_idx]
+        scale = q**degree
+        term_value = _poly_eval_scaled(term, p, q, degree)
+        a, b, c, d = _meta_ingest_values(a, b, c, d, term_value, scale, scale)
+
+        while emit_idx < len(emits) and emits[emit_idx][0] == term_idx + 1:
+            a, b, c, d = _meta_emit_value(a, b, c, d, emits[emit_idx][1])
+            emit_idx += 1
+
+    return a, b, c, d
+
+
+def _meta_apply_poly_emits(
+    emits: list[tuple[int, int]],
+    emit_idx: int,
+    level_count: int,
+    pa: list[int],
+    pb: list[int],
+    pc: list[int],
+    pd: list[int],
+) -> tuple[int, list[int], list[int], list[int], list[int]]:
+    """Apply output terms emitted after level_count symbolic ingests."""
+    while emit_idx < len(emits) and emits[emit_idx][0] == level_count:
+        term = emits[emit_idx][1]
+        pa, pb, pc, pd = (
+            pc,
+            pd,
+            _poly_add(pa, _poly_mul([-term], pc)),
+            _poly_add(pb, _poly_mul([-term], pd)),
+        )
+        emit_idx += 1
+    return emit_idx, pa, pb, pc, pd
+
+
+def _metaCF_rebuild_polys(
+    terms: list[tuple[list[int], int]], emits: list[tuple[int, int]]
+) -> tuple[list[int], list[int], list[int], list[int]]:
+    """Rebuild symbolic polynomials for a terminating simple meta-CF."""
+    if not terms:
+        return [1], [0], [1], [0]
+
+    term, _ = terms[0]
+    pa, pb, pc, pd = list(term), [1], [1], [0]
+    emit_idx = 0
+
+    emit_idx, pa, pb, pc, pd = _meta_apply_poly_emits(
+        emits, emit_idx, 1, pa, pb, pc, pd
+    )
+    for term_idx in range(1, len(terms)):
+        term, _ = terms[term_idx]
+        old_pa, old_pb, old_pc, old_pd = pa, pb, pc, pd
+        pa = _poly_add(old_pb, _poly_mul(term, old_pa))
+        pb = old_pa
+        pc = _poly_add(old_pd, _poly_mul(term, old_pc))
+        pd = old_pc
+        emit_idx, pa, pb, pc, pd = _meta_apply_poly_emits(
+            emits, emit_idx, term_idx + 1, pa, pb, pc, pd
+        )
+
+    return pa, pb, pc, pd
+
+
 def _metaCF_terms(
     x: CF,
     F_iter: Iterator[list[int]],
     gimme_min_term_digits: int | None = _GIMME_MIN_TERM_DIGITS,
 ) -> Iterator[int]:
-    """Yield CF terms of (aF+b)/(cF+d) given the CF terms of F, one at a time.
+    """Yield terms for a simple meta-CF evaluated at x.
 
-    All terms of F and coefficients of the 'homographic' (in F) state are
-    polynomials of x, each represented by a list of coefficients. eg
-      a = [a0, a1, a2, ..., an]
-    represents
-      a0 + a1*x + a2*x**2 + ... + an*x**n
+    The hot path stores consumed polynomial terms and emitted output terms,
+    then replays scalar integer state at each rational interval endpoint.  This
+    avoids growing the symbolic homographic polynomials during ordinary input
+    ingestion.  If the input stream ends before the interval collapses, the
+    symbolic state is rebuilt once for the fallback CF evaluation.
+
+    ``gimme_min_term_digits`` controls gimme mode: when the value hugs an
+    integer boundary so closely that the next partial quotient would have at
+    least this many digits, accept it as that exact rational rather than
+    refining the x-bracket forever.  Set to None to raise on stall instead.
     """
-
     from .core import CF as _CF
 
-    int_pow_cache: dict[int, list[int]] = {}
-    cf_pow_cache: dict[CF, list[CF]] = {}
+    terms: list[tuple[list[int], int]] = []
+    emits: list[tuple[int, int]] = []
 
-    def pfeval_simple(coeffs: list[int], inp: Fraction, n: int) -> int:
-        """Evaluate polynomial with coeffs at inp, times denom**n.
-
-        inp is a fraction with denominator denom
-        """
-        if n < len(coeffs) - 1:
-            raise ValueError("n must be at least len(coeffs)-1")
-        numer = inp.numerator
-        denom = inp.denominator
-        out = 0
-        for i in range(len(coeffs)):
-            if coeffs[i] == 0:
-                continue
-            out += coeffs[i] * numer**i * denom ** (n - i)
-        return out
-
-    def pfeval_large_cache(coeffs: list[int], inp: Fraction, n: int) -> int:
-        """Evaluate polynomial with coeffs at inp, times denom**n.
-
-        inp is a fraction numer/denom.
-        Caches powers of numer, denom across runs of peval.
-        """
-        if len(coeffs) == 0:
-            raise ValueError("coeffs must be nonempty")
-
-        numer = inp.numerator
-        denom = inp.denominator
-
-        n_cache = int_pow_cache.setdefault(numer, [1, numer])
-        d_cache = int_pow_cache.setdefault(denom, [1, denom])
-
-        di = 1
-        for i in range(len(d_cache), n + 1):
-            d_cache.append(d_cache[di] * d_cache[i - di])
-            if i == 2 * di:
-                di = i
-
-        di = 1
-        out = 0
-        for i in range(len(coeffs)):
-            if i == len(n_cache):
-                n_cache.append(n_cache[di] * n_cache[i - di])
-                if i == 2 * di:
-                    di = i
-
-            if coeffs[i] == 0:
-                continue
-
-            out += coeffs[i] * n_cache[i] * d_cache[n - i]
-
-        return out
-
-    # If CF.__pow__ were changed to cache powers,
-    # then peval_simple would have the same outcome as the latter two
-    # peval_small_cache and peval_large_cache,
-    # depending on which implementation was used in CF.__pow__
-    # and the cache would be shared across all plug-ins of x.
-    def peval_simple(coeffs: list[int], inp: CF) -> CF:
-        """Evaluate polynomial with coeffs at inp."""
-        out = _CF.from_int(coeffs[0])
-        for i in range(1, len(coeffs)):
-            if coeffs[i] == 0:
-                continue
-            out += coeffs[i] * inp**i
-        return out
-
-    def peval_small_cache(coeffs: list[int], inp: CF) -> CF:
-        """Evaluate polynomial with coeffs at inp.
-
-        Caches binary powers of inp during computation, then discards.
-        """
-        if len(coeffs) == 0:
-            raise ValueError("coeffs must be nonempty")
-
-        cache = [inp]
-
-        i2 = 1 << len(cache)
-        out = _CF.from_int(coeffs[0])
-        for i in range(1, len(coeffs)):
-            if i == i2:
-                cache.append(cache[-1] ** 2)
-                i2 <<= 1
-
-            if coeffs[i] == 0:
-                continue
-
-            n = i
-            power = None
-            for j in range(len(cache)):
-                if n & 1:
-                    power = cache[j] if power is None else power * cache[j]
-                n >>= 1
-            assert power is not None, f"{i=} nonzero should imply {power=} not None"
-
-            out += coeffs[i] * power
-
-        return out
-
-    def peval_large_cache(coeffs: list[int], inp: CF) -> CF:
-        """Evaluate polynomial with coeffs at inp.
-
-        Caches powers of inp across runs of peval.
-        """
-        if len(coeffs) == 0:
-            raise ValueError("coeffs must be nonempty")
-
-        cache = cf_pow_cache.setdefault(inp, [_CF.from_int(1), inp])
-
-        di = 1
-        out = _CF.from_int(coeffs[0])
-        for i in range(1, len(coeffs)):
-            if i == len(cache):
-                cache.append(cache[di] * cache[i - di])
-                if i == 2 * di:
-                    di = i
-
-            if coeffs[i] == 0:
-                continue
-
-            out += coeffs[i] * cache[i]
-
-        return out
-
-    # Unknown which is faster, have not speed-tested terminating F yet.
-    # Likely not that important, so just go with simple implementation.
-    #
-    # (If caching powers of x in general is desired,                 )
-    # (then it would probably be best to cache them in CF.__pow__    )
-    # (since then plugging x into different metaCF would share cache.)
-    peval = peval_simple
-    # Rationals caused significant slowdown; best to have a separate evaluator.
-    # pfeval avoids fractions by returning the eval times denom**n, an integer.
-    pfeval = pfeval_simple
-
-    def padd(coeffs0: list[int], coeffs1: list[int]) -> list[int]:
-        """Add polynomials with coeffs0 and coeffs1."""
-        coeffs0, coeffs1 = sorted((coeffs0, coeffs1), key=len)
-        out = coeffs1.copy()
-        for i in range(len(coeffs0)):
-            out[i] += coeffs0[i]
-        return out
-
-    def pmul(coeffs0: list[int], coeffs1: list[int]) -> list[int]:
-        """Multiply polynomials with coeffs0 and coeffs1."""
-        out = [0] * (len(coeffs0) + len(coeffs1) - 1)
-        for i in range(len(coeffs0)):
-            for j in range(len(coeffs1)):
-                out[i + j] += coeffs0[i] * coeffs1[j]
-        return out
+    try:
+        term = next(F_iter)
+    except StopIteration:
+        return
+    degree = max(len(term), 1) - 1
+    terms.append((term, degree))
 
     x_i = 1
     stall = 0
@@ -787,57 +827,43 @@ def _metaCF_terms(
     F_done = False
     x_CHANGED = True
 
-    t = next(F_iter)
-    a, b, c, d = t, [1], [1], [0]
-    n = max(len(t), 1) - 1
+    p0 = q0 = p1 = q1 = 0
+    same = True
+    have_interval = False
+
+    a0 = b0 = c0 = d0 = 0
+    a1 = b1 = c1 = d1 = 0
+    n0 = n1 = None
 
     while True:
         if x_CHANGED:
-            # TODO: move to a CF.interval(x_i) method
-            x0 = x.take(x_i)
-            q0 = x0.to_fraction()
-            if len(x0.terms) < x_i:
-                q1 = q0
-            else:
-                x1 = _CF(x0.terms[:-1] + [x0.terms[-1] + 1])
-                q1 = x1.to_fraction()
-                if not (x_i & 1):
-                    q0, q1 = q1, q0
-            assert q0 <= q1  # TODO: move to testing
+            p0, q0, p1, q1, same = x.interval_ints(x_i)
+            have_interval = True
 
-            a0 = pfeval(a, q0, n)
-            b0 = pfeval(b, q0, n)
-            c0 = pfeval(c, q0, n)
-            d0 = pfeval(d, q0, n)
+            a0, b0, c0, d0 = _metaCF_replay_state(terms, emits, p0, q0)
             n0 = _homo_output_simple(a0, b0, c0, d0)
 
-            if q0 == q1:
+            if same:
                 a1, b1, c1, d1, n1 = a0, b0, c0, d0, n0
             else:
-                a1 = pfeval(a, q1, n)
-                b1 = pfeval(b, q1, n)
-                c1 = pfeval(c, q1, n)
-                d1 = pfeval(d, q1, n)
+                a1, b1, c1, d1 = _metaCF_replay_state(terms, emits, p1, q1)
                 n1 = _homo_output_simple(a1, b1, c1, d1)
 
         x_CHANGED = False
-        # If by the time the loop will continue, we still have not x_CHANGED,
-        # then new a0–d1, n0, n1 are calculated based on prior constants,
-        # rather than reevaluating the new polynomials a–d. Faster by about 2×.
 
         if n0 is not None and n0 == n1:
-            nn = n0
-            yield nn
+            term_out = n0
+            yield term_out
             stall = 0
             refine_stall = 0
-            # Subtract n, take reciprocal: (a,b,c,d) → (c, d, a-nc, b-nd)
-            a, b, c, d = c, d, padd(a, pmul([-nn], c)), padd(b, pmul([-nn], d))
-            a0, b0, c0, d0 = c0, d0, a0 - nn * c0, b0 - nn * d0
+            emits.append((len(terms), term_out))
+
+            a0, b0, c0, d0 = _meta_emit_value(a0, b0, c0, d0, term_out)
             n0 = _homo_output_simple(a0, b0, c0, d0)
-            if q0 == q1:
+            if same:
                 a1, b1, c1, d1, n1 = a0, b0, c0, d0, n0
             else:
-                a1, b1, c1, d1 = c1, d1, a1 - nn * c1, b1 - nn * d1
+                a1, b1, c1, d1 = _meta_emit_value(a1, b1, c1, d1, term_out)
                 n1 = _homo_output_simple(a1, b1, c1, d1)
             continue
 
@@ -888,43 +914,45 @@ def _metaCF_terms(
             x_CHANGED = True
             continue
 
-        if F_done and q0 == q1:
-            # F, x exhausted: tail F' → ∞, value is a0/c0: Fraction
+        if F_done and same:
             if c0 == 0:
                 return
-            from .core import CF as _CF
-
-            q = Fraction(a0, c0)
-            yield from _CF.from_fraction(q.numerator, q.denominator)
+            yield from _CF.from_fraction(a0, c0)
             return
 
         if F_done:
-            # F exhausted: tail F' → ∞, value is a/c: CF computed with gosper
-            yield from peval(a, x) / peval(c, x)
+            pa, pb, pc, pd = _metaCF_rebuild_polys(terms, emits)
+            yield from _poly_eval(pa, x) / _poly_eval(pc, x)
             return
 
         try:
-            t = next(F_iter)
+            term = next(F_iter)
         except StopIteration:
             F_done = True
             stall = 0
             continue
 
-        # Ingest: substitute F = t + 1/F'
-        a, b, c, d = padd(b, pmul(t, a)), a, padd(d, pmul(t, c)), c
-        dn = len(t) - 1
-        n += dn
-        tt = q0.denominator**dn  # Equal to pfeval([1], q0, dn)
-        t0 = pfeval(t, q0, dn)
-        a0, b0, c0, d0 = tt * b0 + t0 * a0, tt * a0, tt * d0 + t0 * c0, tt * c0
-        n0 = _homo_output_simple(a0, b0, c0, d0)
-        if q0 == q1:
-            a1, b1, c1, d1, n1 = a0, b0, c0, d0, n0
+        degree = len(term) - 1
+        terms.append((term, degree))
+
+        if have_interval:
+            scale0 = q0**degree
+            term0 = _poly_eval_scaled(term, p0, q0, degree)
+            a0, b0, c0, d0 = _meta_ingest_values(
+                a0, b0, c0, d0, term0, scale0, scale0
+            )
+            n0 = _homo_output_simple(a0, b0, c0, d0)
+            if same:
+                a1, b1, c1, d1, n1 = a0, b0, c0, d0, n0
+            else:
+                scale1 = q1**degree
+                term1 = _poly_eval_scaled(term, p1, q1, degree)
+                a1, b1, c1, d1 = _meta_ingest_values(
+                    a1, b1, c1, d1, term1, scale1, scale1
+                )
+                n1 = _homo_output_simple(a1, b1, c1, d1)
         else:
-            tt = q1.denominator**dn  # Equal to pfeval([1], q1, dn)
-            t1 = pfeval(t, q1, dn)
-            a1, b1, c1, d1 = tt * b1 + t1 * a1, tt * a1, tt * d1 + t1 * c1, tt * c1
-            n1 = _homo_output_simple(a1, b1, c1, d1)
+            n0 = n1 = None
 
         stall += 1
         if stall >= _METACF_STALL_LIMIT:
@@ -965,6 +993,203 @@ def cf_metaCF(
     from .core import CF as _CF
 
     return _CF([], _source=_metaCF_terms(x, F, gimme_min_term_digits))
+
+
+def _metaGCF_replay_state(
+    levels: list[tuple[list[int], list[int], int]],
+    emits: list[tuple[int, int]],
+    p: int,
+    q: int,
+) -> tuple[int, int, int, int]:
+    """Replay generalized meta-CF levels at p/q using integer arithmetic."""
+    if not levels:
+        return 0, 0, 1, 0
+
+    b_poly, a_poly, degree = levels[0]
+    a = _poly_eval_scaled(b_poly, p, q, degree)
+    b = _poly_eval_scaled(a_poly, p, q, degree)
+    c = q**degree
+    d = 0
+
+    emit_idx = 0
+    while emit_idx < len(emits) and emits[emit_idx][0] == 1:
+        a, b, c, d = _meta_emit_value(a, b, c, d, emits[emit_idx][1])
+        emit_idx += 1
+
+    for level_idx in range(1, len(levels)):
+        b_poly, a_poly, degree = levels[level_idx]
+        scale = q**degree
+        b_term = _poly_eval_scaled(b_poly, p, q, degree)
+        a_term = _poly_eval_scaled(a_poly, p, q, degree)
+        a, b, c, d = _meta_ingest_values(a, b, c, d, b_term, a_term, scale)
+
+        while emit_idx < len(emits) and emits[emit_idx][0] == level_idx + 1:
+            a, b, c, d = _meta_emit_value(a, b, c, d, emits[emit_idx][1])
+            emit_idx += 1
+
+    return a, b, c, d
+
+
+def _metaGCF_rebuild_polys(
+    levels: list[tuple[list[int], list[int], int]], emits: list[tuple[int, int]]
+) -> tuple[list[int], list[int], list[int], list[int]]:
+    """Rebuild symbolic polynomials for a terminating generalized meta-CF."""
+    if not levels:
+        return [1], [0], [1], [0]
+
+    b_poly, a_poly, _ = levels[0]
+    pa, pb, pc, pd = list(b_poly), list(a_poly), [1], [0]
+    emit_idx = 0
+    emit_idx, pa, pb, pc, pd = _meta_apply_poly_emits(
+        emits, emit_idx, 1, pa, pb, pc, pd
+    )
+
+    for level_idx in range(1, len(levels)):
+        b_poly, a_poly, _ = levels[level_idx]
+        old_pa, old_pb, old_pc, old_pd = pa, pb, pc, pd
+        pa = _poly_add(_poly_mul(old_pa, b_poly), old_pb)
+        pb = _poly_mul(old_pa, a_poly)
+        pc = _poly_add(_poly_mul(old_pc, b_poly), old_pd)
+        pd = _poly_mul(old_pc, a_poly)
+        emit_idx, pa, pb, pc, pd = _meta_apply_poly_emits(
+            emits, emit_idx, level_idx + 1, pa, pb, pc, pd
+        )
+
+    return pa, pb, pc, pd
+
+
+def _metaGCF_terms(x: CF, F_iter: Iterator[tuple[list[int], list[int]]]) -> Iterator[int]:
+    """Yield terms for a generalized meta-CF evaluated at x.
+
+    The input stream gives levels of ``F = b(x) + a(x)/F'``.  The driver keeps
+    the scalar endpoint state hot and records consumed levels plus emitted
+    output terms.  When the x interval changes, it replays that history at the
+    new integer endpoint pair instead of maintaining growing symbolic
+    polynomials on every ingest.
+    """
+    from .core import CF as _CF
+
+    levels: list[tuple[list[int], list[int], int]] = []
+    emits: list[tuple[int, int]] = []
+
+    try:
+        b_poly, a_poly = next(F_iter)
+    except StopIteration:
+        return
+    degree = max(len(b_poly), len(a_poly), 1) - 1
+    levels.append((b_poly, a_poly, degree))
+
+    x_i = 1
+    stall = 0
+    F_done = False
+    x_CHANGED = True
+
+    p0 = q0 = p1 = q1 = 0
+    same = True
+    have_interval = False
+
+    a0 = b0 = c0 = d0 = 0
+    a1 = b1 = c1 = d1 = 0
+    n0 = n1 = None
+
+    while True:
+        if x_CHANGED:
+            p0, q0, p1, q1, same = x.interval_ints(x_i)
+            have_interval = True
+
+            a0, b0, c0, d0 = _metaGCF_replay_state(levels, emits, p0, q0)
+            n0 = _homo_output(a0, b0, c0, d0)
+
+            if same:
+                a1, b1, c1, d1, n1 = a0, b0, c0, d0, n0
+            else:
+                a1, b1, c1, d1 = _metaGCF_replay_state(levels, emits, p1, q1)
+                n1 = _homo_output(a1, b1, c1, d1)
+
+        x_CHANGED = False
+
+        if n0 is not None and n0 == n1:
+            term_out = n0
+            yield term_out
+            stall = 0
+            emits.append((len(levels), term_out))
+
+            a0, b0, c0, d0 = _meta_emit_value(a0, b0, c0, d0, term_out)
+            n0 = _homo_output(a0, b0, c0, d0)
+            if same:
+                a1, b1, c1, d1, n1 = a0, b0, c0, d0, n0
+            else:
+                a1, b1, c1, d1 = _meta_emit_value(a1, b1, c1, d1, term_out)
+                n1 = _homo_output(a1, b1, c1, d1)
+            continue
+
+        if n0 is not None and n1 is not None:
+            x_i += 1
+            x_CHANGED = True
+            continue
+
+        if F_done and same:
+            if c0 == 0:
+                return
+            yield from _CF.from_fraction(a0, c0)
+            return
+
+        if F_done:
+            pa, pb, pc, pd = _metaGCF_rebuild_polys(levels, emits)
+            yield from _poly_eval(pa, x) / _poly_eval(pc, x)
+            return
+
+        try:
+            b_poly, a_poly = next(F_iter)
+        except StopIteration:
+            F_done = True
+            stall = 0
+            continue
+
+        degree = max(len(b_poly), len(a_poly), 1) - 1
+        levels.append((b_poly, a_poly, degree))
+
+        if have_interval:
+            scale0 = q0**degree
+            b_term0 = _poly_eval_scaled(b_poly, p0, q0, degree)
+            a_term0 = _poly_eval_scaled(a_poly, p0, q0, degree)
+            a0, b0, c0, d0 = _meta_ingest_values(
+                a0, b0, c0, d0, b_term0, a_term0, scale0
+            )
+            n0 = _homo_output(a0, b0, c0, d0)
+            if same:
+                a1, b1, c1, d1, n1 = a0, b0, c0, d0, n0
+            else:
+                scale1 = q1**degree
+                b_term1 = _poly_eval_scaled(b_poly, p1, q1, degree)
+                a_term1 = _poly_eval_scaled(a_poly, p1, q1, degree)
+                a1, b1, c1, d1 = _meta_ingest_values(
+                    a1, b1, c1, d1, b_term1, a_term1, scale1
+                )
+                n1 = _homo_output(a1, b1, c1, d1)
+        else:
+            n0 = n1 = None
+
+        stall += 1
+        if stall >= _METACF_STALL_LIMIT:
+            raise ValueError(
+                f"cf_metaGCF stalled: no term emitted after consuming {_METACF_STALL_LIMIT} consecutive pairs"
+            )
+
+
+def cf_metaGCF(x: CF, F: Iterator[tuple[list[int], list[int]]]) -> CF:
+    """Return the CF for a generalized meta-CF evaluated at x.
+
+    The input stream gives ``(b(x), a(x))`` polynomial pairs for:
+
+        b0(x) + a1(x)/(b1(x) + a2(x)/(b2(x) + ...))
+
+    Coefficient lists are low-to-high order.  ``cf_metaCF`` is the special case
+    where every numerator polynomial is ``[1]``.
+    """
+    from .core import CF as _CF
+
+    return _CF([], _source=_metaGCF_terms(x, F))
 
 
 # ---------------------------------------------------------------------------

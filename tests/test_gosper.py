@@ -5,6 +5,7 @@ from fractions import Fraction
 import pytest
 
 from cfmath import CF, Phi, Sqrt, convergent, convergents
+from cfmath.gosper import cf_metaGCF
 
 
 def _eval(cf: CF, depth: int = 15) -> Fraction:
@@ -17,6 +18,29 @@ def _eval(cf: CF, depth: int = 15) -> Fraction:
 
 def _ref(p: int, q: int = 1) -> CF:
     return CF.from_fraction(p, q)
+
+
+class TestMetaGCF:
+    def test_finite_rational_value(self):
+        z = Fraction(2, 3)
+        terms = iter([
+            ([0, 1], [1]),
+            ([0, 3], [4]),
+            ([0, 5], [1]),
+        ])
+
+        result = cf_metaGCF(CF.from_rational(z), terms).take(20).to_fraction()
+        expected = z + Fraction(1, 3 * z + Fraction(4, 5 * z))
+
+        assert result == expected
+
+    def test_stalling_stream_raises(self):
+        def terms():
+            while True:
+                yield ([0], [1])
+
+        with pytest.raises(ValueError, match="cf_metaGCF stalled"):
+            cf_metaGCF(CF.from_int(1), terms()).take(1)
 
 
 # ---------------------------------------------------------------------------

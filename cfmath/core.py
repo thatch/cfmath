@@ -43,6 +43,8 @@ class CF:
         self._debug_source: object | None = None
         # _cache grows lazily; starts populated with the static terms
         self._cache: list[int] = list(self.terms)
+        self._convergent_cache: list[tuple[int, int]] = []
+        self._float_convergent_cache: list[tuple[float, float]] = []
 
     # ------------------------------------------------------------------
     # Classmethods / constructors
@@ -359,6 +361,120 @@ class CF:
         p_prev, q_prev = pairs[-2]
         return abs(Fraction(p_n, q_n) - Fraction(p_prev, q_prev))
 
+    def _ensure_convergents(self, n_terms: int) -> None:
+        """Extend cached convergents through the available prefix."""
+        if n_terms < 1:
+            raise ValueError("n_terms must be at least 1")
+
+        while len(self._convergent_cache) < n_terms:
+            i = len(self._convergent_cache)
+            if i >= len(self._cache) and not self._grow_cache():
+                return
+
+            a = self._cache[i]
+            if i == 0:
+                p_prev2, q_prev2 = 0, 1
+                p_prev1, q_prev1 = 1, 0
+            elif i == 1:
+                p_prev2, q_prev2 = 1, 0
+                p_prev1, q_prev1 = self._convergent_cache[-1]
+            else:
+                p_prev2, q_prev2 = self._convergent_cache[-2]
+                p_prev1, q_prev1 = self._convergent_cache[-1]
+            self._convergent_cache.append((a * p_prev1 + p_prev2, a * q_prev1 + q_prev2))
+            p_new, q_new = self._convergent_cache[-1]
+            self._float_convergent_cache.append((float(p_new), float(q_new)))
+
+    def interval(self, n_terms: int) -> tuple[Fraction, Fraction]:
+        """Return rational bounds known to contain this CF after n_terms.
+
+        The bound uses the nth convergent and the neighboring value obtained by
+        increasing the last consumed term by one.  Consecutive depths flip order;
+        the returned pair is always ``(lo, hi)``.  If the CF terminates before
+        n_terms, both bounds are the exact finite value.
+        """
+        self._ensure_convergents(n_terms)
+        if not self._convergent_cache:
+            raise ValueError("empty CF")
+
+        idx = min(n_terms, len(self._convergent_cache)) - 1
+        p, q = self._convergent_cache[idx]
+        q0 = Fraction(p, q)
+        if len(self._convergent_cache) < n_terms:
+            return q0, q0
+
+        if idx == 0:
+            p_prev, q_prev = 1, 0
+        else:
+            p_prev, q_prev = self._convergent_cache[idx - 1]
+        q1 = Fraction(p + p_prev, q + q_prev)
+        if q0 <= q1:
+            return q0, q1
+        return q1, q0
+
+    def interval_ints(self, n_terms: int) -> tuple[int, int, int, int, bool]:
+        """Return the interval endpoints as raw integer pairs, avoiding Fraction creation.
+
+        Returns ``(p0, q0, p1, q1, same)`` where ``p0/q0`` and ``p1/q1`` are the
+        low and high rational bounds (always p0/q0 <= p1/q1), and ``same`` is
+        True when both endpoints are equal (CF terminated before n_terms).
+        The returned pairs are in lowest terms only by the convergent recurrence,
+        not via explicit GCD reduction, so callers must not reduce further.
+        """
+        self._ensure_convergents(n_terms)
+        if not self._convergent_cache:
+            raise ValueError("empty CF")
+
+        idx = min(n_terms, len(self._convergent_cache)) - 1
+        p, q = self._convergent_cache[idx]
+
+        if len(self._convergent_cache) < n_terms:
+            # CF terminated; both endpoints equal p/q.
+            return p, q, p, q, True
+
+        if idx == 0:
+            p_prev, q_prev = 1, 0
+        else:
+            p_prev, q_prev = self._convergent_cache[idx - 1]
+
+        # Perturbed convergent: (p + p_prev) / (q + q_prev)
+        pp, qp = p + p_prev, q + q_prev
+
+        # Even-depth convergents are lower bounds; odd are upper bounds.
+        # Compare p/q vs pp/qp: p*qp vs pp*q (cross multiply, denominators > 0).
+        # q_prev may be 0 at idx==0, but qp = q + q_prev = q + 0 = q which is > 0 for idx>0.
+        # At idx==0: q=0 is not possible for valid CFs (first convergent is a0/1).
+        # Actually p_prev=1, q_prev=0 at idx==0, so qp = q + 0 = q (=1 for a0=1-digit CF).
+        if p * qp <= pp * q:
+            return p, q, pp, qp, False
+        return pp, qp, p, q, False
+
+    def interval_float(self, n_terms: int) -> tuple[float, float]:
+        """Like interval() but returns float bounds instead of Fraction.
+
+        Uses the float convergent cache for speed.  Exact for convergent
+        numerators below 2^53; above that, treat as an approximation only.
+        Both bounds are the same float when the CF terminates before n_terms.
+        """
+        self._ensure_convergents(n_terms)
+        if not self._float_convergent_cache:
+            raise ValueError("empty CF")
+
+        idx = min(n_terms, len(self._float_convergent_cache)) - 1
+        fp, fq = self._float_convergent_cache[idx]
+        fq0 = fp / fq
+        if len(self._float_convergent_cache) < n_terms:
+            return fq0, fq0
+
+        if idx == 0:
+            fp_prev, fq_prev = 1.0, 0.0
+        else:
+            fp_prev, fq_prev = self._float_convergent_cache[idx - 1]
+        fq1 = (fp + fp_prev) / (fq + fq_prev)
+        if fq0 <= fq1:
+            return fq0, fq1
+        return fq1, fq0
+
     # ------------------------------------------------------------------
     # Representation
     # ------------------------------------------------------------------
@@ -425,6 +541,11 @@ class CF:
     # ------------------------------------------------------------------
 
     def __eq__(self, other: object) -> bool:
+        if isinstance(other, int):
+            if self.is_finite():
+                return self.to_fraction() == other
+            head = self.take(2)
+            return len(head.terms) == 1 and head.terms[0] == other
         if not isinstance(other, CF):
             return NotImplemented
         # Finite CFs: exact rational comparison
