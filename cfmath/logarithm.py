@@ -82,10 +82,8 @@ def _ln_terms_from_cf(x: CF, n_terms: int) -> list[int]:
 
     from .convergents import convergent as _convergent
 
-    dps = n_terms * 4 + 50
-    mpmath.mp.dps = dps
-    depth = n_terms * 2 + 20
-    approx: Fraction = _convergent(x, depth)
+    mpmath.mp.dps = n_terms * 5 + 80
+    approx: Fraction = _convergent(x, n_terms * 2 + 20)
     if approx <= 0:
         raise ValueError("Ln of non-positive number")
     val = mpmath.log(mpmath.mpf(approx.numerator) / mpmath.mpf(approx.denominator))
@@ -103,7 +101,7 @@ def Ln(x: int | Fraction | CF) -> CF:
     x may be a positive int, Fraction, or CF.
     Uses ln(x) = 2·atanh((x-1)/(x+1)) with argument reduction when mpmath
     is unavailable, otherwise delegates to mpmath for speed.
-    CF inputs always require mpmath.
+    CF inputs always require mpmath (used to evaluate a convergent).
 
     Examples::
 
@@ -112,8 +110,15 @@ def Ln(x: int | Fraction | CF) -> CF:
         Ln(Sqrt(2))  # ≈ [0; 2, 1, 2, 1, 4, 1, ...]  (= ln(2)/2)
     """
     if isinstance(x, CF):
+        # Quick non-positive check from the first term alone.
+        # a0 < 0 → definitely negative; a0 == 0 with no further terms → zero.
+        a0 = next(x._iter_from(0))
+        if a0 < 0 or (a0 == 0 and not x.repeating and x._source is None and len(x.terms) == 1):
+            raise ValueError("Ln of non-positive number")
+
         x_cf: CF = x
         return _lazy_cf(lambda n: _ln_terms_from_cf(x_cf, n))
+
     if isinstance(x, int):
         x = Fraction(x)
     elif not isinstance(x, Fraction):
