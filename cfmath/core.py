@@ -438,9 +438,16 @@ class CF:
             if av is None and bv is None:
                 return True
             if av is None or bv is None:
-                return False  # one terminated while the other still has terms
+                return False  # one terminated while the other still has non-equivalent terms
             if av != bv:
-                return False
+                # check for equivalent terms:
+                #    [..., av, 1]    or     [..., bv + 1]
+                # == [..., av + 1]       == [..., bv, 1]
+                if bv == av + 1 and next(xi, None) == 1 and next(xi, None) is None and next(yi, None) is None:
+                    return True  # equivalent terms: av, 1 == av + 1
+                if av == bv + 1 and next(yi, None) == 1 and next(xi, None) is None and next(yi, None) is None:
+                    return True  # equivalent terms: bv, 1 == bv + 1
+                return False  # non-equivalent terms
         return True  # _CMP_DEPTH exhausted — treat as equal
 
     # Old convergent-based __eq__ (kept for reference):

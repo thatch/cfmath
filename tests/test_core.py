@@ -249,9 +249,17 @@ class TestEquality:
 
     def test_equal_different_reps(self):
         # [3, 7] and [3, 6, 1] both = 22/7
-        a = CF([3, 7])
-        b = CF([3, 6, 1])
-        assert a == b
+        ta = [3, 7]
+        tb = [3, 6, 1]
+        a0 = CF(ta)
+        b0 = CF(tb)
+        assert a0 == b0
+        a1 = CF([], _source=iter(ta))
+        b1 = CF([], _source=iter(tb))
+        assert b0 == a1 == b1 == a0
+        a2 = 3 + 1 / CF.from_int(7)
+        b2 = 3 + 1 / (CF.from_int(6) + 1)
+        assert b1 == a2 == b2 == a1
 
 
 # ---------------------------------------------------------------------------
