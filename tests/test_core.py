@@ -2,10 +2,12 @@
 
 import math
 from fractions import Fraction
+from itertools import islice
 
 import pytest
 
-from cfmath import CF
+from cfmath import CF, CountingIterator, digits_with_debug
+from cfmath._backend import _cf_terms_from_interval_approximator
 
 # ---------------------------------------------------------------------------
 # Construction
@@ -13,6 +15,10 @@ from cfmath import CF
 
 
 class TestFromInt:
+    def test_empty_cf_rejected(self):
+        with pytest.raises(ValueError):
+            CF([])
+
     def test_positive(self):
         cf = CF.from_int(5)
         assert cf.terms == [5]
@@ -52,6 +58,10 @@ class TestFromFraction:
         cf = CF.from_fraction(-1, 2)
         assert cf.to_fraction() == Fraction(-1, 2)
 
+    def test_negative_improper_fraction(self):
+        cf = CF.from_fraction(-7, 3)
+        assert cf.to_fraction() == Fraction(-7, 3)
+
     def test_negative_both(self):
         cf = CF.from_fraction(-3, -4)
         assert cf.to_fraction() == Fraction(3, 4)
@@ -87,6 +97,9 @@ class TestFromFloat:
         cf = CF.from_float(5.0, max_terms=10)
         assert cf.terms[0] == 5
 
+    def test_exact_integer_stops_after_one_term(self):
+        assert CF.from_float(5.0, max_terms=10).terms == [5]
+
     def test_half(self):
         cf = CF.from_float(0.5, max_terms=10)
         assert cf.to_fraction() == Fraction(1, 2)
@@ -96,6 +109,75 @@ class TestFromFloat:
         # Should be approximately [0; 3]
         assert cf.terms[0] == 0
         assert cf.terms[1] == 3
+
+
+class TestIntervalApproximator:
+    def test_exact_singleton(self):
+        terms = _cf_terms_from_interval_approximator(lambda _: (Fraction(22, 7), Fraction(22, 7)), 2)
+        assert terms == [3, 7]
+
+    def test_doubles_until_term_is_pinned(self):
+        calls = []
+
+        def interval(precision: int) -> tuple[Fraction, Fraction]:
+            calls.append(precision)
+            if precision < 32:
+                return Fraction(0), Fraction(2)
+            return Fraction(3, 2), Fraction(8, 5)
+
+        terms = _cf_terms_from_interval_approximator(interval, 1, initial=8)
+
+        assert terms == [1]
+        assert calls == [8, 16, 32]
+
+    def test_negative_interval(self):
+        terms = _cf_terms_from_interval_approximator(
+            lambda _: (Fraction(-3, 2), Fraction(-7, 5)),
+            1,
+        )
+
+        assert terms == [-2]
+
+    def test_zero_straddling_interval_refines(self):
+        calls = []
+
+        def interval(precision: int) -> tuple[Fraction, Fraction]:
+            calls.append(precision)
+            if precision < 16:
+                return Fraction(-1, 10), Fraction(1, 10)
+            return Fraction(17, 50), Fraction(7, 20)
+
+        terms = _cf_terms_from_interval_approximator(interval, 2, initial=8)
+
+        assert terms == [0, 2]
+        assert calls == [8, 16]
+
+    def test_unpinned_interval_raises_at_max_precision(self):
+        with pytest.raises(ValueError):
+            _cf_terms_from_interval_approximator(
+                lambda _: (Fraction(0), Fraction(2)),
+                1,
+                initial=8,
+                max_precision=8,
+            )
+
+
+class TestDebugUtilities:
+    def test_counting_iterator_counts_consumed_items(self):
+        counter = CountingIterator(iter([10, 20, 30]))
+
+        assert iter(counter) is counter
+        assert next(counter) == 10
+        assert counter.count == 1
+        assert next(counter) == 20
+        assert counter.count == 2
+
+    def test_digits_with_debug_reports_digit_and_terms_consumed(self):
+        digits = list(islice(digits_with_debug(CF.from_rational(Fraction(355, 113))), 3))
+
+        assert [digit for digit, _ in digits] == [3, 1, 4]
+        assert all(cost >= 0 for _, cost in digits)
+        assert sum(cost for _, cost in digits) > 0
 
 
 class TestFromTerms:
@@ -147,6 +229,25 @@ class TestIteration:
         v2 = next(it2)
         assert v2 == 1  # it2 unaffected by it1's advancement
 
+    def test_lazy_source_exhausts(self):
+        cf = CF([], _source=iter([1, 2]))
+        assert list(cf) == [1, 2]
+        assert cf.is_finite()
+
+    def test_take_from_empty_lazy_source_raises(self):
+        with pytest.raises(ValueError):
+            CF([], _source=iter([])).take(1)
+
+    def test_to_fraction_from_exhausted_empty_source_raises(self):
+        cf = CF([], _source=iter([]))
+        assert list(cf) == []
+        with pytest.raises(ValueError, match="empty CF"):
+            cf.to_fraction()
+
+    def test_digits_reject_invalid_later_term(self):
+        with pytest.raises(ValueError, match="invalid CF term"):
+            list(CF([1, 0]).digits())
+
 
 # ---------------------------------------------------------------------------
 # Predicates
@@ -165,6 +266,18 @@ class TestPredicates:
 
     def test_not_periodic_finite(self):
         assert not CF([1, 2]).is_periodic()
+
+
+class TestErrorEstimate:
+    def test_single_term_error_estimate(self):
+        assert CF.from_int(3).err_estimate == Fraction(1)
+
+    def test_multi_term_error_estimate(self):
+        assert CF([3, 7]).err_estimate == abs(Fraction(22, 7) - Fraction(3))
+
+    def test_infinite_error_estimate_raises(self):
+        with pytest.raises(ValueError):
+            CF([1], repeating=[2]).err_estimate
 
 
 # ---------------------------------------------------------------------------
@@ -190,6 +303,13 @@ class TestRepr:
 
         r = repr(Pi())
         assert "..." in r or ";" in r
+
+    def test_lazy_repr_peeks_at_source(self):
+        r = repr(CF([], _source=iter([1, 2, 3, 4])))
+        assert r.startswith("[1; 2, 3")
+
+    def test_exhausted_lazy_repr(self):
+        assert repr(CF([], _source=iter([]))) == "CF([])"
 
     def test_exact_terminating(self):
         # 1/4 = 0.25 terminates in base 10 → "="
@@ -261,6 +381,61 @@ class TestEquality:
         b2 = 3 + 1 / (CF.from_int(6) + 1)
         assert b1 == a2 == b2 == a1
 
+    def test_equality_accepts_int_rhs(self):
+        assert CF.from_int(1) == 1
+        assert CF([0, 1]) == 1
+        assert CF.from_fraction(1, 2) != 0
+
+    def test_equality_with_unsupported_type_is_not_implemented(self):
+        assert CF.from_int(1).__eq__(object()) is NotImplemented
+
+    def test_hash_matches_equal_finite_value(self):
+        assert hash(CF([3, 7])) == hash(CF([3, 6, 1]))
+
+    def test_hash_for_infinite_uses_prefix(self):
+        assert isinstance(hash(CF([1], repeating=[2])), int)
+
+    def test_interval_for_finite_cf_collapses(self):
+        assert CF.from_rational(Fraction(3, 2)).interval(3) == (Fraction(3, 2), Fraction(3, 2))
+
+    def test_interval_orders_odd_and_even_depths(self):
+        cf = CF([1], repeating=[2])
+        lo1, hi1 = cf.interval(1)
+        lo2, hi2 = cf.interval(2)
+
+        assert lo1 == Fraction(1)
+        assert hi1 == Fraction(2)
+        assert lo2 == Fraction(4, 3)
+        assert hi2 == Fraction(3, 2)
+
+    def test_interval_reuses_cached_convergents(self):
+        cf = CF([1], repeating=[2])
+        assert cf.interval(4) == (Fraction(24, 17), Fraction(17, 12))
+        cached = list(cf._convergent_cache)
+
+        assert cf.interval(2) == (Fraction(4, 3), Fraction(3, 2))
+        assert cf._convergent_cache == cached
+
+
+class TestOperators:
+    def test_unsupported_binary_operands_return_not_implemented(self):
+        cf = CF.from_int(1)
+
+        assert cf.__add__(object()) is NotImplemented
+        assert cf.__sub__(object()) is NotImplemented
+        assert cf.__mul__(object()) is NotImplemented
+        assert cf.__truediv__(object()) is NotImplemented
+
+    def test_fraction_exponent_dispatches_to_pow(self):
+        result = CF.from_int(4).__pow__(Fraction(1, 2))
+        assert result == CF.from_int(2)
+
+    def test_reciprocal(self):
+        assert CF.from_int(4).reciprocal().take(4).to_fraction() == Fraction(1, 4)
+
+    def test_normalize_absorbs_zero_term(self):
+        assert CF([1, 0, 2]).normalize().take(4).to_fraction() == Fraction(3)
+
 
 # ---------------------------------------------------------------------------
 # from_digits — inverse of digits()
@@ -289,6 +464,10 @@ class TestFromDigits:
     def test_integer_only(self):
         """A single-digit input gives the corresponding integer CF."""
         assert CF.from_digits([7]) == CF.from_int(7)
+
+    def test_empty_digit_stream_raises_on_take(self):
+        with pytest.raises(ValueError):
+            CF.from_digits([]).take(1)
 
     def test_zero(self):
         assert CF.from_digits([0]) == CF.from_int(0)

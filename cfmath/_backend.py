@@ -170,6 +170,57 @@ def _mpmath_cf(
         cf._debug_source = debug_source
     return cf
 
+def _cf_terms_from_interval_approximator(
+    interval_at_precision: Callable[[int], tuple[Fraction, Fraction]],
+    n_terms: int,
+    initial: int = 16,
+    max_precision: int = 1 << 16,
+) -> list[int]:
+    """Return CF terms once rational intervals prove them.
+
+    The caller supplies ``interval_at_precision(p)``, which must return
+    rational bounds ``lo <= x <= hi``.  This helper extracts simple-CF terms
+    only while both endpoints force the same next integer.  If the interval
+    straddles an integer boundary or zero after subtracting a term, the helper
+    doubles precision and starts over.
+    """
+    precision = initial
+    while precision <= max_precision:
+        lo, hi = interval_at_precision(precision)
+        if lo > hi:
+            lo, hi = hi, lo
+
+        terms: list[int] = []
+        while len(terms) < n_terms:
+            if lo == hi:
+                terms.extend(CF.from_rational(lo).terms)
+                return terms[:n_terms]
+
+            a_lo = lo.numerator // lo.denominator
+            a_hi = hi.numerator // hi.denominator
+            if a_lo != a_hi:
+                break
+
+            a = a_lo
+            terms.append(a)
+            lo -= a
+            hi -= a
+
+            if lo == hi == 0:
+                return terms
+            if lo <= 0 <= hi:
+                break
+
+            lo, hi = Fraction(1, hi), Fraction(1, lo)
+            if lo > hi:
+                lo, hi = hi, lo
+
+        if len(terms) >= n_terms:
+            return terms[:n_terms]
+        precision *= 2
+
+    raise ValueError(f"could not pin {n_terms} CF terms by precision {max_precision}")
+
 
 def _coerce_trig_arg(x: int | Fraction) -> Fraction:
     """Validate and coerce a trig/hyperbolic function argument to Fraction."""

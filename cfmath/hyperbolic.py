@@ -5,7 +5,13 @@ from __future__ import annotations
 from fractions import Fraction
 from typing import Iterator
 
-from ._backend import _HAS_MPMATH, _annotate_cf, _coerce_trig_arg, _lazy_cf
+from ._backend import (
+    _HAS_MPMATH,
+    _annotate_cf,
+    _cf_terms_from_interval_approximator,
+    _coerce_trig_arg,
+    _lazy_cf,
+)
 from .core import CF
 
 # ---------------------------------------------------------------------------
@@ -14,73 +20,63 @@ from .core import CF
 
 
 def _sinh_terms_from_decimal(x_num: int, x_den: int, n_terms: int) -> list[int]:
-    """Compute n_terms CF terms of sinh(x_num/x_den) using high-precision Decimal.
+    """Compute n_terms CF terms of sinh(x_num/x_den) using rational intervals."""
+    x = Fraction(x_num, x_den)
 
-    Uses the Taylor series sinh(x) = Σ x²ⁿ⁺¹/(2n+1)!  No external library required.
-    """
-    import decimal
-
-    prec = n_terms * 5 + 80
-    ctx = decimal.Context(prec=prec, rounding=decimal.ROUND_FLOOR)
-    with decimal.localcontext(ctx):
-        x = decimal.Decimal(x_num) / decimal.Decimal(x_den)
-        x2 = x * x
-        term = x
-        val = x
-        k = 1
-        eps = decimal.Decimal(10) ** (-(prec - 10))
-        while True:
-            term *= x2 / decimal.Decimal((2 * k) * (2 * k + 1))
+    def _exp_positive_interval(y: Fraction, precision: int) -> tuple[Fraction, Fraction]:
+        k_limit = max(precision, 2 * y.numerator // y.denominator + 4)
+        term = Fraction(1)
+        val = Fraction(1)
+        for k in range(1, k_limit + 1):
+            term *= y / k
             val += term
-            if abs(term) < eps:
-                break
-            k += 1
 
-        terms: list[int] = []
-        for _ in range(n_terms):
-            a = int(val.to_integral_value(rounding=decimal.ROUND_FLOOR))
-            terms.append(a)
-            frac = val - a
-            if frac <= eps:
-                break
-            val = decimal.Decimal(1) / frac
+        next_term = term * y / (k_limit + 1)
+        ratio = y / (k_limit + 2)
+        if ratio >= 1:
+            return _exp_positive_interval(y, precision * 2)
+        tail = next_term / (1 - ratio)
+        return val, val + tail
 
-    return terms
+    def _interval(precision: int) -> tuple[Fraction, Fraction]:
+        sign = -1 if x < 0 else 1
+        y = abs(x)
+        e_lo, e_hi = _exp_positive_interval(y, precision)
+        inv_lo, inv_hi = Fraction(1, e_hi), Fraction(1, e_lo)
+        lo = (e_lo - inv_hi) / 2
+        hi = (e_hi - inv_lo) / 2
+        if sign < 0:
+            return -hi, -lo
+        return lo, hi
+
+    return _cf_terms_from_interval_approximator(_interval, n_terms)
 
 
 def _cosh_terms_from_decimal(x_num: int, x_den: int, n_terms: int) -> list[int]:
-    """Compute n_terms CF terms of cosh(x_num/x_den) using high-precision Decimal.
+    """Compute n_terms CF terms of cosh(x_num/x_den) using rational intervals."""
+    x = abs(Fraction(x_num, x_den))
 
-    Uses the Taylor series cosh(x) = Σ x²ⁿ/(2n)!  No external library required.
-    """
-    import decimal
-
-    prec = n_terms * 5 + 80
-    ctx = decimal.Context(prec=prec, rounding=decimal.ROUND_FLOOR)
-    with decimal.localcontext(ctx):
-        x = decimal.Decimal(x_num) / decimal.Decimal(x_den)
-        x2 = x * x
-        term = decimal.Decimal(1)
-        val = decimal.Decimal(1)
-        k = 1
-        eps = decimal.Decimal(10) ** (-(prec - 10))
-        while True:
-            term *= x2 / decimal.Decimal((2 * k - 1) * (2 * k))
+    def _exp_positive_interval(y: Fraction, precision: int) -> tuple[Fraction, Fraction]:
+        k_limit = max(precision, 2 * y.numerator // y.denominator + 4)
+        term = Fraction(1)
+        val = Fraction(1)
+        for k in range(1, k_limit + 1):
+            term *= y / k
             val += term
-            if abs(term) < eps:
-                break
-            k += 1
 
-        terms: list[int] = []
-        for _ in range(n_terms):
-            a = int(val.to_integral_value(rounding=decimal.ROUND_FLOOR))
-            terms.append(a)
-            frac = val - a
-            if frac <= eps:
-                break
-            val = decimal.Decimal(1) / frac
+        next_term = term * y / (k_limit + 1)
+        ratio = y / (k_limit + 2)
+        if ratio >= 1:
+            return _exp_positive_interval(y, precision * 2)
+        tail = next_term / (1 - ratio)
+        return val, val + tail
 
-    return terms
+    def _interval(precision: int) -> tuple[Fraction, Fraction]:
+        e_lo, e_hi = _exp_positive_interval(x, precision)
+        inv_lo, inv_hi = Fraction(1, e_hi), Fraction(1, e_lo)
+        return (e_lo + inv_lo) / 2, (e_hi + inv_hi) / 2
+
+    return _cf_terms_from_interval_approximator(_interval, n_terms)
 
 
 # ---------------------------------------------------------------------------

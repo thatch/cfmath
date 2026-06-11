@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 import os
+import threading
 from fractions import Fraction
 from typing import Iterable, Iterator
 
@@ -45,6 +46,8 @@ class CF:
         self._cache: list[int] = list(self.terms)
         self._convergent_cache: list[tuple[int, int]] = []
         self._float_convergent_cache: list[tuple[float, float]] = []
+        # Guard cache growth. Read hits stay lock-free; only misses serialize.
+        self._lock = threading.Lock()
 
     # ------------------------------------------------------------------
     # Classmethods / constructors
@@ -198,8 +201,8 @@ class CF:
     # Iteration — index-stable so Gosper can hold two independent cursors
     # ------------------------------------------------------------------
 
-    def _grow_cache(self) -> bool:
-        """Try to extend _cache by one term. Returns True if a term was added."""
+    def _grow_cache_locked(self) -> bool:
+        """Try to extend _cache by one term while holding _lock."""
         if self.repeating:
             self._cache.extend(self.repeating)
             return True
@@ -211,6 +214,11 @@ class CF:
             except StopIteration:
                 self._source = None
         return False
+
+    def _grow_cache(self) -> bool:
+        """Try to extend _cache by one term. Returns True if a term was added."""
+        with self._lock:
+            return self._grow_cache_locked()
 
     def _iter_from(self, start: int = 0) -> Iterator[int]:
         """Yield terms starting at cache position `start`.
@@ -366,24 +374,30 @@ class CF:
         if n_terms < 1:
             raise ValueError("n_terms must be at least 1")
 
-        while len(self._convergent_cache) < n_terms:
-            i = len(self._convergent_cache)
-            if i >= len(self._cache) and not self._grow_cache():
-                return
+        if len(self._convergent_cache) >= n_terms:
+            return
 
-            a = self._cache[i]
-            if i == 0:
-                p_prev2, q_prev2 = 0, 1
-                p_prev1, q_prev1 = 1, 0
-            elif i == 1:
-                p_prev2, q_prev2 = 1, 0
-                p_prev1, q_prev1 = self._convergent_cache[-1]
-            else:
-                p_prev2, q_prev2 = self._convergent_cache[-2]
-                p_prev1, q_prev1 = self._convergent_cache[-1]
-            self._convergent_cache.append((a * p_prev1 + p_prev2, a * q_prev1 + q_prev2))
-            p_new, q_new = self._convergent_cache[-1]
-            self._float_convergent_cache.append((float(p_new), float(q_new)))
+        with self._lock:
+            if len(self._convergent_cache) >= n_terms:
+                return
+            while len(self._convergent_cache) < n_terms:
+                i = len(self._convergent_cache)
+                if i >= len(self._cache) and not self._grow_cache_locked():
+                    return
+
+                a = self._cache[i]
+                if i == 0:
+                    p_prev2, q_prev2 = 0, 1
+                    p_prev1, q_prev1 = 1, 0
+                elif i == 1:
+                    p_prev2, q_prev2 = 1, 0
+                    p_prev1, q_prev1 = self._convergent_cache[-1]
+                else:
+                    p_prev2, q_prev2 = self._convergent_cache[-2]
+                    p_prev1, q_prev1 = self._convergent_cache[-1]
+                self._convergent_cache.append((a * p_prev1 + p_prev2, a * q_prev1 + q_prev2))
+                p_new, q_new = self._convergent_cache[-1]
+                self._float_convergent_cache.append((float(p_new), float(q_new)))
 
     def interval(self, n_terms: int) -> tuple[Fraction, Fraction]:
         """Return rational bounds known to contain this CF after n_terms.

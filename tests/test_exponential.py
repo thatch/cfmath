@@ -6,7 +6,7 @@ from fractions import Fraction
 import pytest
 
 from cfmath import CF, E, Exp, Ln, convergent
-from cfmath.exponential import _exp_terms_from_decimal, _exp_terms_from_mpmath
+from cfmath.exponential import ExpCF, _exp_terms_from_decimal, _exp_terms_from_mpmath
 
 
 class TestExp:
@@ -150,6 +150,25 @@ class TestGimmeThreshold:
         assert ExpCF(x).take(6).terms == reference
         # Too low (20 < 40): the value is wrongly rationalized to [2].
         assert ExpCF(x, gimme_min_term_digits=20).take(6).terms == [2]
+
+
+class TestExpCF:
+    def test_exp_cf_zero_is_exact(self):
+        assert ExpCF(CF.from_int(0)) == CF.from_int(1)
+
+    def test_exp_cf_bad_type(self):
+        with pytest.raises(TypeError):
+            ExpCF(object())  # type: ignore[arg-type]
+
+    def test_exp_cf_fraction_matches_exp(self):
+        assert ExpCF(CF.from_rational(Fraction(1, 2))).take(12) == Exp(Fraction(1, 2)).take(12)
+
+    def test_exp_cf_simple_mode_matches_exp(self):
+        assert ExpCF(CF.from_rational(Fraction(1, 2)), mode="simple").take(12) == Exp(Fraction(1, 2)).take(12)
+
+    def test_exp_cf_integer_part(self):
+        val = float(convergent(ExpCF(CF.from_rational(Fraction(3, 2))).take(15), 14))
+        assert abs(val - math.exp(1.5)) < 1e-8
 
 
 class TestDecimalBackend:
