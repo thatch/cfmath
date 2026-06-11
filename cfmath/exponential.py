@@ -88,6 +88,7 @@ class ExpCFMode(Enum):
     SIMPLE = 2
     DEFAULT = POLY
 
+
 def ExpCF(x: CF, mode: ExpCFMode = ExpCFMode.DEFAULT) -> CF:
     """e raised to the power x, as a continued fraction.
 

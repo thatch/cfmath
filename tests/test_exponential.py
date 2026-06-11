@@ -6,7 +6,7 @@ from fractions import Fraction
 import pytest
 
 from cfmath import CF, E, EulerGamma, Exp, Ln, Pi, convergent
-from cfmath.exponential import _exp_terms_from_decimal, _exp_terms_from_mpmath, ExpCFMode, ExpCF, ExpMP
+from cfmath.exponential import ExpCF, ExpCFMode, ExpMP, _exp_terms_from_decimal, _exp_terms_from_mpmath
 from cfmath.quadratic import Sqrt
 
 
@@ -77,7 +77,7 @@ class _TestExpCF:
 
     def _test_exp_cf_exp_pi(self, benchmark):
         """Benchmark ExpCF(Pi())."""
-        n_terms = self.N_TERMS//4
+        n_terms = self.N_TERMS // 4
         cf_terms = benchmark(self._exp_take, self.pi, n_terms)
         mp_terms = ExpMP(self.pi).take(n_terms)
         assert cf_terms == mp_terms
@@ -103,8 +103,8 @@ class TestExpMpmath(_TestExpCF):
 
     def test_exp_mpmath_exp_pi(self, benchmark):
         """Benchmark ExpMP(Pi()) as a control."""
-        n_terms = self.N_TERMS//4
-        mp_terms = benchmark(self._exp_take, self.pi, n_terms)
+        n_terms = self.N_TERMS // 4
+        benchmark(self._exp_take, self.pi, n_terms)
 
 
 class TestDecimalBackend:
