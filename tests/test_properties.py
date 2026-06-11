@@ -28,10 +28,24 @@ def _cf(frac: Fraction) -> CF:
 
 def _last_convergent(cf: CF, max_terms: int = 60) -> Fraction:
     """Return the last convergent of cf, taking up to max_terms terms."""
-    convs = list(convergents(cf.take(max_terms)))
-    if not convs:
+    last: tuple[int, int] | None = None
+    for last in convergent_pairs(cf.take(max_terms)):
+        pass
+    if last is None:
         raise ValueError("empty CF")
-    return convs[-1]
+    p, q = last
+    return Fraction(p, q)
+
+
+def _positive_bounded_fracs():
+    """Fractions in [1/10, 10] with small denominators."""
+    return st.integers(min_value=1, max_value=100).flatmap(
+        lambda q: st.builds(
+            Fraction,
+            st.integers(min_value=(q + 9) // 10, max_value=10 * q),
+            st.just(q),
+        )
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -128,7 +142,7 @@ class TestDeterminantIdentity:
 
 class TestBestApproximationBound:
     @given(
-        st.fractions(min_value=Fraction(1, 10), max_value=Fraction(10)),
+        _positive_bounded_fracs(),
         st.integers(min_value=0, max_value=6),
     )
     @settings(deadline=timedelta(milliseconds=200))

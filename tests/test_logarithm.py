@@ -47,7 +47,7 @@ class TestLn:
         v2 = float(convergent((Ln(2) / 2).take(15), 14))
         assert abs(v1 - v2) < 1e-10
 
-    def test_ln_cf_value(self):
+    def test_ln_cf_sqrt2_value(self):
         """Ln(Sqrt(2)) ≈ 0.3466."""
         val = float(convergent(Ln(Sqrt(2)).take(15), 14))
         assert abs(val - math.log(2) / 2) < 1e-10

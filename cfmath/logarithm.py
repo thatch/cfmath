@@ -132,12 +132,13 @@ def Ln(x: int | Fraction | CF) -> CF:
         x = x.to_fraction()
 
     if isinstance(x, CF):
+        if x.is_finite():
+            return Ln(x.to_fraction())
         # Quick non-positive check from the first term alone.
         # a0 < 0 → definitely negative; a0 == 0 with no further terms → zero.
         a0 = next(x._iter_from(0))
         if a0 < 0 or (a0 == 0 and not x.repeating and x._source is None and len(x.terms) == 1):
             raise ValueError("Ln of non-positive number")
-
         x_cf: CF = x
         return _lazy_cf(lambda n: _ln_terms_from_cf(x_cf, n), debug_source=("Ln", x_cf))
 

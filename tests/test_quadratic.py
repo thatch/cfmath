@@ -6,6 +6,13 @@ from fractions import Fraction
 import pytest
 
 from cfmath import CF, Sqrt, convergent
+from cfmath.quadratic import (
+    _cf_from_poly,
+    _minimal_poly,
+    _periodic_mul,
+    _periodic_square,
+    _square_free_decomp,
+)
 
 
 class TestSqrt:
@@ -114,3 +121,44 @@ class TestQuadraticSurds:
         silver = CF.from_int(1) + Sqrt(2).take(20)
         val = float(convergent(silver.take(20), 19))
         assert abs(val - (1 + math.sqrt(2))) < 1e-8
+
+
+class TestQuadraticHelpers:
+    def test_minimal_poly_for_non_periodic_returns_none(self):
+        assert _minimal_poly(CF.from_int(2)) is None
+
+    def test_minimal_poly_for_sqrt2(self):
+        A, B, C = _minimal_poly(Sqrt(2))
+        assert A * 2 + B * math.sqrt(2) + C == 0
+        assert (A, B, C) == (-1, 0, 2)
+
+    def test_square_free_decomp(self):
+        assert _square_free_decomp(72) == (2, 6)
+        assert _square_free_decomp(13) == (13, 1)
+
+    def test_cf_from_poly_negative_discriminant_returns_none(self):
+        assert _cf_from_poly(1, 0, 1) is None
+
+    def test_cf_from_poly_rational_roots(self):
+        assert _cf_from_poly(1, -3, 2) == CF.from_int(2)
+        assert _cf_from_poly(1, 0, 0) == CF.from_int(0)
+
+    def test_cf_from_poly_sqrt2(self):
+        cf = _cf_from_poly(1, 0, -2)
+        assert cf.terms == Sqrt(2).terms
+        assert cf.repeating == Sqrt(2).repeating
+
+    def test_periodic_square_non_periodic_returns_none(self):
+        assert _periodic_square(CF.from_int(2)) is None
+
+    def test_periodic_square_sqrt2_is_exact(self):
+        assert _periodic_square(Sqrt(2)) == CF.from_int(2)
+
+    def test_periodic_mul_non_periodic_returns_none(self):
+        assert _periodic_mul(CF.from_int(2), Sqrt(2)) is None
+
+    def test_periodic_mul_different_fields_returns_none(self):
+        assert _periodic_mul(Sqrt(2), Sqrt(3)) is None
+
+    def test_periodic_mul_same_field(self):
+        assert _periodic_mul(Sqrt(8), Sqrt(2)) == CF.from_int(4)
