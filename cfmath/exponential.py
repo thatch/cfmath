@@ -130,25 +130,6 @@ def ExpCF(x: CF, mode: ExpCFMode = ExpCFMode.DEFAULT) -> CF:
     assert False
 
 
-# TODO: Move to tests
-def test_ExpCF(mode: ExpCFMode = ExpCFMode.DEFAULT) -> None:
-    from .constants import EulerGamma, Pi
-    from .quadratic import Sqrt
-
-    assert E() == ExpCF(CF.from_int(1))
-    for val in (1 / Sqrt(2), Sqrt(2), Pi(), EulerGamma() + Pi() + Sqrt(2)):
-        y0 = ExpMP(val).take(80).terms
-        y1 = ExpCF(val, mode).take(80).terms
-        assert y0 == y1
-    from timeit import timeit
-
-    n = 1000
-    setup = "from cfmath import Pi, exponential; pi = Pi(); pi.take(20)"
-    t0 = timeit(f"exponential.ExpMP(pi).take(20)", setup, number=n)
-    t1 = timeit(f"exponential.ExpCF(pi, exponential.{mode}).take(20)", setup, number=n)
-    print(f"{(t1 - t0) / t0:6.0%} ({t1:.0f}s) time taken for ExpCF(Pi) for {n=} runs")
-
-
 def ExpMP(x: int | Fraction | CF) -> CF:
     """e raised to the power x, as a continued fraction.
 
