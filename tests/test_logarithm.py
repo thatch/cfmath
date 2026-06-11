@@ -8,6 +8,8 @@ import pytest
 from cfmath import CF, Ln, Log, Log2, Log10, convergent
 from cfmath.logarithm import _ln_terms_from_decimal, _ln_terms_from_mpmath
 from cfmath.quadratic import Sqrt
+from cfmath import Pi
+from cfmath.logarithm import LnCF, Log10CF, Log2CF, LogCF, _ln1p_cf
 
 
 class TestLn:
@@ -81,10 +83,59 @@ class TestLn:
 
     def test_ln_decimal_matches_mpmath(self):
         """Decimal and mpmath backends produce identical CF terms."""
-        for x_num, x_den in [(2, 1), (3, 1), (355, 113)]:
+        for x_num, x_den in [(2, 1), (3, 1), (355, 113), (1, 3)]:
             dec = _ln_terms_from_decimal(x_num, x_den, 30)
             mpm = _ln_terms_from_mpmath(x_num, x_den, 30)
             assert dec == mpm, f"Ln({x_num}/{x_den}): decimal vs mpmath mismatch"
+
+    def test_ln1p_cf_zero_is_exact(self):
+        assert _ln1p_cf(Fraction(0)) == CF.from_int(0)
+
+    def test_ln_cf_matches_existing_terms(self):
+        """Experimental meta-CF backend emits the same terms as Ln."""
+        for x in (
+            Fraction(2),
+            Fraction(3),
+            Fraction(3, 2),
+            Fraction(355, 113),
+            Fraction(1, 3),
+            Fraction(10),
+        ):
+            meta = list(LnCF(x).take(20))
+            current = list(Ln(x).take(20))
+            mpm = _ln_terms_from_mpmath(x.numerator, x.denominator, 20)
+            assert meta == current == mpm, f"LnCF({x}) term mismatch"
+
+    def test_ln_cf_value(self):
+        """Experimental meta-CF backend agrees with math.log."""
+        for x in (
+            Fraction(2),
+            Fraction(3),
+            Fraction(3, 2),
+            Fraction(355, 113),
+            Fraction(1, 3),
+            Fraction(10),
+        ):
+            val = float(convergent(LnCF(x).take(25), 24))
+            assert abs(val - math.log(float(x))) < 1e-8, f"LnCF({x})"
+
+    def test_ln_cf_accepts_finite_cf(self):
+        assert list(LnCF(CF.from_int(2)).take(8)) == list(LnCF(2).take(8))
+        assert LnCF(CF.from_int(1)) == CF.from_int(0)
+        with pytest.raises(ValueError):
+            LnCF(CF.from_int(0))
+
+    def test_ln_cf_bad_type_raises(self):
+        with pytest.raises(TypeError):
+            LnCF(1.5)  # type: ignore[arg-type]
+
+    def test_ln_cf_accepts_irrational_cf(self):
+        for x, expected in (
+            (Sqrt(2), math.log(math.sqrt(2))),
+            (Pi(), math.log(math.pi)),
+        ):
+            val = float(convergent(LnCF(x).take(12), 11))
+            assert abs(val - expected) < 1e-8
 
 
 class TestLog2:
@@ -96,14 +147,26 @@ class TestLog2:
     def test_log2_not_periodic(self):
         assert not Log2(123).is_periodic()
 
+    def test_log2_cf_value(self):
+        val = float(convergent(Log2CF(123).take(20), 19))
+        assert abs(val - math.log2(123)) < 1e-8
+
+    def test_log2_exact_reciprocal_power(self):
+        assert Log2(Fraction(1, 8)) == CF.from_int(-3)
+
 
 class TestLog10:
     def test_log10_exact(self):
         assert Log10(10) == CF.from_int(1)
         assert Log10(100) == CF.from_int(2)
+        assert Log10(Fraction(1, 100)) == CF.from_int(-2)
 
     def test_log10_value(self):
         val = float(convergent(Log10(2).take(20), 19))
+        assert abs(val - math.log10(2)) < 1e-8
+
+    def test_log10_cf_value(self):
+        val = float(convergent(Log10CF(2).take(20), 19))
         assert abs(val - math.log10(2)) < 1e-8
 
 
@@ -115,9 +178,13 @@ class TestLog:
 
     def test_log_base_2_exact(self):
         assert Log(8, 2) == CF.from_int(3)
+        assert Log(Fraction(1, 4), 2) == CF.from_int(-2)
+        assert Log(8, Fraction(1, 2)) == CF.from_int(-3)
+        assert Log(Fraction(1, 8), Fraction(1, 2)) == CF.from_int(3)
 
     def test_log_base_10_exact(self):
         assert Log(1000, 10) == CF.from_int(3)
+        assert Log(Fraction(1, 1000), 10) == CF.from_int(-3)
 
     def test_log_bad_base_type(self):
         with pytest.raises(TypeError):
@@ -132,3 +199,19 @@ class TestLog:
     def test_log_value(self):
         val = float(convergent(Log(3, 2).take(20), 19))
         assert abs(val - math.log(3, 2)) < 1e-8
+
+    def test_log_cf_value(self):
+        val = float(convergent(LogCF(3, 2).take(20), 19))
+        assert abs(val - math.log(3, 2)) < 1e-8
+
+    def test_log_cf_no_base_is_ln_cf(self):
+        assert LogCF(2).take(12) == LnCF(2).take(12)
+
+    def test_log_cf_bad_base_type(self):
+        with pytest.raises(TypeError):
+            LogCF(2, 1.5)  # type: ignore[arg-type]
+
+    def test_log_cf_bad_base_value(self):
+        for base in (1, 0, CF.from_int(1), CF.from_int(0)):
+            with pytest.raises(ValueError):
+                LogCF(2, base)
