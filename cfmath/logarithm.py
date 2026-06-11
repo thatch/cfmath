@@ -134,6 +134,37 @@ def Ln(x: int | Fraction | CF) -> CF:
     return _lazy_cf(lambda n: _ln_terms_from_decimal(num, den, n))
 
 
+def _coerce_log_arg(x: int | Fraction | CF) -> Fraction | None:
+    """Return x as a Fraction if it is rational, else None."""
+    if isinstance(x, int):
+        return Fraction(x)
+    if isinstance(x, Fraction):
+        return x
+    if isinstance(x, CF) and x.is_finite():
+        return x.to_fraction()
+    return None
+
+
+def _exact_rational_log(x: Fraction, base: Fraction) -> int | None:
+    """Return k if x == base**k for integer k, else None."""
+    if x <= 0 or base <= 0 or base == 1:
+        return None
+    if x == 1:
+        return 0
+    if base < 1:
+        found = _exact_rational_log(x, 1 / base)
+        return None if found is None else -found
+    if x < 1:
+        found = _exact_rational_log(1 / x, base)
+        return None if found is None else -found
+    power = Fraction(1)
+    k = 0
+    while power < x:
+        power *= base
+        k += 1
+    return k if power == x else None
+
+
 def Log10(x: int | Fraction | CF) -> CF:
     """Common logarithm (base 10) of x, as a continued fraction.
 
@@ -146,6 +177,11 @@ def Log10(x: int | Fraction | CF) -> CF:
         Log10(100)              # [2]
         Log10(2)                # ≈ [0; 3, 3, 9, 2, 1, 1, 2, ...]
     """
+    x_rat = _coerce_log_arg(x)
+    if x_rat is not None:
+        exact = _exact_rational_log(x_rat, Fraction(10))
+        if exact is not None:
+            return CF.from_int(exact)
     return Ln(x) / Ln(10)
 
 
@@ -171,6 +207,11 @@ def Log(x: int | Fraction | CF, base: int | Fraction | None = None) -> CF:
         raise TypeError(f"Log() base expects int or Fraction, got {type(base).__name__}")
     if base <= 0 or base == 1:
         raise ValueError(f"Log() base must be positive and ≠ 1, got {base}")
+    x_rat = _coerce_log_arg(x)
+    if x_rat is not None:
+        exact = _exact_rational_log(x_rat, base)
+        if exact is not None:
+            return CF.from_int(exact)
     return Ln(x) / Ln(base)
 
 
@@ -186,4 +227,9 @@ def Log2(n: int | Fraction | CF) -> CF:
         Log2(4)                 # [2]
         Log2(123)               # [6; 1, 16, 2, 1, 1, 8, ...]
     """
+    n_rat = _coerce_log_arg(n)
+    if n_rat is not None:
+        exact = _exact_rational_log(n_rat, Fraction(2))
+        if exact is not None:
+            return CF.from_int(exact)
     return Ln(n) / Ln(2)
