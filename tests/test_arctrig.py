@@ -7,6 +7,10 @@ import pytest
 
 from cfmath import Arccos, Arcsin, Arctan, convergent
 from cfmath.arctrig import (
+    ArctanCF,
+    ArctanGCF,
+    ArctanMP,
+    ArctrigMode,
     _arccos_terms_mpmath,
     _arcsin_terms_mpmath,
     _arctan_terms_mpmath,
@@ -48,6 +52,51 @@ class TestArctan:
             mpm = _arctan_terms_mpmath(x.numerator, x.denominator, 20)
             assert gcf == mpm, f"Arctan({x}): GCF vs mpmath mismatch"
 
+    def test_arctan_cf_matches_existing_terms(self):
+        """Experimental meta-CF backend emits the same terms as Arctan."""
+        for x in (
+            Fraction(1, 4),
+            Fraction(1, 3),
+            Fraction(1, 2),
+            Fraction(1),
+            Fraction(2),
+            Fraction(-1, 3),
+        ):
+            meta = list(ArctanCF(x).take(20))
+            current = list(Arctan(x).take(20))
+            mpm = _arctan_terms_mpmath(x.numerator, x.denominator, 20)
+            assert meta == current == mpm, f"ArctanCF({x}) term mismatch"
+
+    def test_arctan_cf_zero(self):
+        assert ArctanCF(0) == Arctan(0)
+
+    def test_arctan_cf_value(self):
+        """Experimental meta-CF backend agrees with math.atan."""
+        for x in (
+            Fraction(1, 4),
+            Fraction(1, 3),
+            Fraction(1, 2),
+            Fraction(1),
+            Fraction(2),
+            Fraction(-1, 3),
+        ):
+            val = float(convergent(ArctanCF(x).take(25), 24))
+            assert abs(val - math.atan(float(x))) < 1e-8, f"ArctanCF({x})"
+
+    def test_arctan_dispatch_modes(self):
+        x = Fraction(1, 3)
+        assert Arctan(x).take(12) == ArctanGCF(x).take(12)
+        assert Arctan(x, ArctrigMode.GCF).take(12) == ArctanGCF(x).take(12)
+        assert Arctan(x, ArctrigMode.CF).take(12) == ArctanCF(x).take(12)
+        assert Arctan(x, ArctrigMode.MP).take(12) == ArctanMP(x).take(12)
+        assert Arctan(x, "cf").take(12) == ArctanCF(x).take(12)
+
+    def test_arctan_bad_mode_raises(self):
+        with pytest.raises(ValueError):
+            Arctan(Fraction(1, 3), "bogus")
+        with pytest.raises(TypeError):
+            Arctan(Fraction(1, 3), object())  # type: ignore[arg-type]
+
 
 class TestArcsin:
     def test_arcsin_zero(self):
@@ -60,6 +109,10 @@ class TestArcsin:
     def test_arcsin_out_of_range_raises(self):
         with pytest.raises(ValueError):
             Arcsin(Fraction(3, 2))
+
+    def test_arcsin_negative_out_of_range_raises(self):
+        with pytest.raises(ValueError):
+            Arcsin(Fraction(-3, 2))
 
     def test_arcsin_first_terms(self):
         s = Arcsin(Fraction(1, 2))
@@ -88,6 +141,10 @@ class TestArccos:
     def test_arccos_one(self):
         assert Arccos(1).terms == [0]
 
+    def test_arccos_zero_is_half_pi(self):
+        val = float(convergent(Arccos(0).take(20), 19))
+        assert abs(val - math.pi / 2) < 1e-8
+
     def test_arccos_bad_type_raises(self):
         with pytest.raises(TypeError):
             Arccos(1.5)
@@ -95,6 +152,10 @@ class TestArccos:
     def test_arccos_out_of_range_raises(self):
         with pytest.raises(ValueError):
             Arccos(Fraction(3, 2))
+
+    def test_arccos_negative_out_of_range_raises(self):
+        with pytest.raises(ValueError):
+            Arccos(Fraction(-3, 2))
 
     def test_arccos_value(self):
         for x in (Fraction(1, 4), Fraction(1, 2), Fraction(1, 3), Fraction(3, 4)):

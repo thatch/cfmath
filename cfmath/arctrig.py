@@ -2,11 +2,35 @@
 
 from __future__ import annotations
 
+from enum import Enum
 from fractions import Fraction
 from typing import Iterator
 
-from ._backend import _annotate_cf, _coerce_trig_arg
+from ._backend import _annotate_cf, _coerce_trig_arg, _lazy_cf
 from .core import CF
+
+
+class ArctrigMode(Enum):
+    """Select the implementation used by inverse trigonometric functions."""
+
+    AUTO = "auto"
+    GCF = "gcf"
+    CF = "cf"
+    MP = "mp"
+
+
+def _coerce_arctrig_mode(mode: ArctrigMode | str | None) -> ArctrigMode:
+    """Return an ArctrigMode, accepting strings as a compatibility convenience."""
+    if mode is None:
+        return ArctrigMode.AUTO
+    if isinstance(mode, ArctrigMode):
+        return mode
+    if isinstance(mode, str):
+        try:
+            return ArctrigMode(mode)
+        except ValueError as exc:
+            raise ValueError(f"unknown inverse trig mode {mode!r}") from exc
+    raise TypeError(f"inverse trig mode expects ArctrigMode, str, or None, got {type(mode).__name__}")
 
 # ---------------------------------------------------------------------------
 # Generalized CF generators (exact, no floating point)
@@ -22,6 +46,17 @@ def _arctan_pairs(x: Fraction) -> Iterator[tuple[int, Fraction]]:
     k = 0
     while True:
         yield (2 * k + 1, (k + 1) ** 2 * x2)
+        k += 1
+
+
+def _arctan_meta_gcf_terms() -> Iterator[tuple[list[int], list[int]]]:
+    """Yield polynomial terms for arctan(1/z)'s Gauss generalized CF.
+
+    arctan(1/z) = 1 / (z + 1²/(3z + 2²/(5z + ...))).
+    """
+    k = 0
+    while True:
+        yield ([0, 2 * k + 1], [(k + 1) ** 2])
         k += 1
 
 
@@ -91,7 +126,7 @@ def _arccos_terms_mpmath(x_num: int, x_den: int, n_terms: int) -> list[int]:
 # ---------------------------------------------------------------------------
 
 
-def Arctan(x: int | Fraction) -> CF:
+def ArctanGCF(x: int | Fraction) -> CF:
     """Arctangent of x (in radians), as a continued fraction.
 
     x may be an int or Fraction.  Returns CF([0]) for x=0.
@@ -107,6 +142,53 @@ def Arctan(x: int | Fraction) -> CF:
     if x == 0:
         return _annotate_cf(CF.from_int(0), ("Arctan", x))
     return _annotate_cf(CF.from_rational(x) / CF.from_generalized_cf(_arctan_pairs(x)), ("Arctan", x))
+
+
+def ArctanCF(x: int | Fraction, mode: ArctrigMode | str | None = None) -> CF:
+    """Arctangent of x, using the experimental meta-CF path.
+
+    The public ``Arctan`` function keeps using the direct Gauss generalized CF.
+    This variant first rewrites small positive inputs as ``arctan(1/z)`` and
+    evaluates the denominator as a generalized meta-CF in ``z``.  That keeps the
+    numerator terms positive, but adds the cost of Gosper evaluation around the
+    polynomial term stream.
+    """
+    x = _coerce_trig_arg(x)
+    if x == 0:
+        return CF.from_int(0)
+    if x < 0:
+        return -ArctanCF(-x, mode=mode)
+    if x > 1:
+        from .constants import Pi
+
+        return Pi() / CF.from_int(2) - ArctanCF(Fraction(1, 1) / x, mode=mode)
+
+    from .gosper import cf_metaGCF
+
+    z = 1 / CF.from_rational(x)
+    return 1 / cf_metaGCF(z, _arctan_meta_gcf_terms())
+
+
+def ArctanMP(x: int | Fraction) -> CF:
+    """Arctangent of x using mpmath term extraction."""
+    x = _coerce_trig_arg(x)
+    if x == 0:
+        return CF.from_int(0)
+    return _lazy_cf(lambda n: _arctan_terms_mpmath(x.numerator, x.denominator, n))
+
+
+def Arctan(x: int | Fraction, mode: ArctrigMode | str | None = None) -> CF:
+    """Arctangent of x, dispatching among GCF, CF, and mpmath implementations."""
+    mode = _coerce_arctrig_mode(mode)
+    if mode is ArctrigMode.AUTO:
+        return ArctanGCF(x)
+    if mode is ArctrigMode.GCF:
+        return ArctanGCF(x)
+    if mode is ArctrigMode.CF:
+        return ArctanCF(x)
+    if mode is ArctrigMode.MP:
+        return ArctanMP(x)
+    raise AssertionError(f"unhandled inverse trig mode {mode!r}")
 
 
 def Arcsin(x: int | Fraction) -> CF:
