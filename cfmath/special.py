@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from fractions import Fraction
 
-from ._backend import _HAS_MPMATH, _lazy_cf
+from ._backend import _HAS_MPMATH, _annotate_cf, _lazy_cf, _mpmath_cf
 from .core import CF
 
 # ---------------------------------------------------------------------------
@@ -108,7 +108,7 @@ def Zeta(s: int) -> CF:
     from .constants import Apery
 
     if s == 3:
-        return Apery()
+        return _annotate_cf(Apery(), ("Zeta", s))
     if s % 2 == 0:
         n = s // 2
         from math import factorial
@@ -118,14 +118,20 @@ def Zeta(s: int) -> CF:
         from .constants import Pi
 
         pi = Pi()
-        result: CF = CF.from_rational(coeff)
+        result: CF = _annotate_cf(CF.from_rational(coeff), ("Zeta", s))
         for _ in range(2 * n):
             result = result * pi
-        return result
+        return _annotate_cf(result, ("Zeta", s))
     else:
         if _HAS_MPMATH:
-            return _lazy_cf(lambda n_terms: _zeta_odd_terms_mpmath(s, n_terms))
-        return _lazy_cf(lambda n_terms: _zeta_odd_terms_from_decimal(s, n_terms))
+
+            def _val() -> object:
+                import mpmath
+
+                return mpmath.zeta(s)
+
+            return _mpmath_cf(_val, debug_source=("Zeta", s))
+        return _lazy_cf(lambda n_terms: _zeta_odd_terms_from_decimal(s, n_terms), debug_source=("Zeta", s))
 
 
 # ---------------------------------------------------------------------------
@@ -179,7 +185,7 @@ def Gamma(x: int | Fraction) -> CF:
 
     if x.denominator == 1:
         n = x.numerator
-        return CF.from_int(_math.factorial(n - 1))
+        return _annotate_cf(CF.from_int(_math.factorial(n - 1)), ("Gamma", x))
 
     num, den = x.numerator, x.denominator
-    return _lazy_cf(lambda n: _gamma_terms_mpmath(num, den, n))
+    return _lazy_cf(lambda n: _gamma_terms_mpmath(num, den, n), debug_source=("Gamma", x))

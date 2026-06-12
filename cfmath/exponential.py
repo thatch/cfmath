@@ -5,7 +5,7 @@ from __future__ import annotations
 from fractions import Fraction
 from typing import Callable, Iterator
 
-from ._backend import _HAS_MPMATH, _coerce_trig_arg, _lazy_cf
+from ._backend import _HAS_MPMATH, _annotate_cf, _coerce_trig_arg, _lazy_cf
 from .constants import E
 from .core import CF
 from .gosper import _GIMME_MIN_TERM_DIGITS
@@ -114,7 +114,7 @@ def ExpCF(
 
     if x == CF.from_int(0):
         # I can do this one in my head.
-        return CF.from_int(1)
+        return _annotate_cf(CF.from_int(1), ("Exp", x))
 
     x0 = x.take(1).terms[0]
     if x0 != 0:
@@ -134,9 +134,12 @@ def ExpCF(
     #   Exp(1/z) = 1 + 2/[2z-1; 6z, 10z, 14z, ...]
     # and it will converge efficiently with z and each term in (1, ∞)
     if mode is None:
-        return 1 + 2 / cf_metaCF(1 / x, _halfexpm1_metaCF_terms(), gimme_min_term_digits=gimme_min_term_digits)
+        return _annotate_cf(
+            1 + 2 / cf_metaCF(1 / x, _halfexpm1_metaCF_terms(), gimme_min_term_digits=gimme_min_term_digits),
+            ("ExpCF", x),
+        )
     if mode == "simple":
-        return 1 + 2 / cf_metaCF_simple(1 / x, _halfexpm1_metaCF_simple_terms())
+        return _annotate_cf(1 + 2 / cf_metaCF_simple(1 / x, _halfexpm1_metaCF_simple_terms()), ("ExpCF", x))
     assert False
 
 
@@ -204,15 +207,15 @@ def ExpMP(x: int | Fraction | CF) -> CF:
                 val = 1 / (val - a)
             return terms
 
-        return _lazy_cf(_compute)
+        return _lazy_cf(_compute, debug_source=("Exp", x_cf))
 
     x = _coerce_trig_arg(x)
     if x == 0:
-        return CF.from_int(1)
+        return _annotate_cf(CF.from_int(1), ("Exp", x))
     num, den = x.numerator, x.denominator
     if _HAS_MPMATH:
-        return _lazy_cf(lambda n: _exp_terms_from_mpmath(num, den, n))
-    return _lazy_cf(lambda n: _exp_terms_from_decimal(num, den, n))
+        return _lazy_cf(lambda n: _exp_terms_from_mpmath(num, den, n), debug_source=("Exp", x))
+    return _lazy_cf(lambda n: _exp_terms_from_decimal(num, den, n), debug_source=("Exp", x))
 
 
 Exp = ExpMP  # TODO: Move into .core or wherever default behavior is selected

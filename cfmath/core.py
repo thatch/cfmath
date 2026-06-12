@@ -40,6 +40,7 @@ class CF:
         self.terms: list[int] = list(terms)
         self.repeating: list[int] = list(repeating or [])
         self._source: Iterator[int] | None = _source
+        self._debug_source: object | None = None
         # _cache grows lazily; starts populated with the static terms
         self._cache: list[int] = list(self.terms)
 

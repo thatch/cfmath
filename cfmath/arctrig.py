@@ -5,7 +5,7 @@ from __future__ import annotations
 from fractions import Fraction
 from typing import Iterator
 
-from ._backend import _coerce_trig_arg
+from ._backend import _annotate_cf, _coerce_trig_arg
 from .core import CF
 
 # ---------------------------------------------------------------------------
@@ -105,8 +105,8 @@ def Arctan(x: int | Fraction) -> CF:
     """
     x = _coerce_trig_arg(x)
     if x == 0:
-        return CF.from_int(0)
-    return CF.from_rational(x) / CF.from_generalized_cf(_arctan_pairs(x))
+        return _annotate_cf(CF.from_int(0), ("Arctan", x))
+    return _annotate_cf(CF.from_rational(x) / CF.from_generalized_cf(_arctan_pairs(x)), ("Arctan", x))
 
 
 def Arcsin(x: int | Fraction) -> CF:
@@ -126,8 +126,8 @@ def Arcsin(x: int | Fraction) -> CF:
     if abs(x) > 1:
         raise ValueError(f"Arcsin argument must satisfy |x| ≤ 1, got {x}")
     if x == 0:
-        return CF.from_int(0)
-    return CF.from_rational(x) / CF.from_generalized_cf(_arcsin_pairs(x))
+        return _annotate_cf(CF.from_int(0), ("Arcsin", x))
+    return _annotate_cf(CF.from_rational(x) / CF.from_generalized_cf(_arcsin_pairs(x)), ("Arcsin", x))
 
 
 def Arccos(x: int | Fraction) -> CF:
@@ -146,10 +146,10 @@ def Arccos(x: int | Fraction) -> CF:
     if abs(x) > 1:
         raise ValueError(f"Arccos argument must satisfy |x| ≤ 1, got {x}")
     if x == 1:
-        return CF.from_int(0)
+        return _annotate_cf(CF.from_int(0), ("Arccos", x))
     from .constants import Pi
 
     half_pi = Pi() / CF.from_int(2)
     if x == 0:
-        return half_pi
-    return half_pi - Arcsin(x)
+        return _annotate_cf(half_pi, ("Arccos", x))
+    return _annotate_cf(half_pi - Arcsin(x), ("Arccos", x))

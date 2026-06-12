@@ -50,6 +50,7 @@ import os
 from fractions import Fraction
 from typing import TYPE_CHECKING, Callable, Iterator
 
+from ._backend import _annotate_cf
 from .quadratic import _periodic_mul, _periodic_square
 
 if TYPE_CHECKING:
@@ -246,7 +247,10 @@ def cf_homographic(x: CF, a: int, b: int, c: int, d: int) -> CF:
     """
     from .core import CF as _CF
 
-    return _CF([], _source=_homographic_terms(x._iter_from(0), a, b, c, d))
+    return _annotate_cf(
+        _CF([], _source=_homographic_terms(x._iter_from(0), a, b, c, d)),
+        ("cf_homographic", x, a, b, c, d),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -970,7 +974,7 @@ def cf_metaCF(
 
 def cf_add(x: CF, y: CF) -> CF:
     """Return x + y as a continued fraction, computed exactly using Gosper's algorithm."""
-    return _bihomographic(x, y, 0, 1, 1, 0, 0, 0, 0, 1)
+    return _annotate_cf(_bihomographic(x, y, 0, 1, 1, 0, 0, 0, 0, 1), ("cf_add", x, y))
 
 
 def cf_sub(x: CF, y: CF) -> CF:
@@ -982,8 +986,8 @@ def cf_sub(x: CF, y: CF) -> CF:
     if x is y:
         from .core import CF as _CF
 
-        return _CF.from_int(0)
-    return _bihomographic(x, y, 0, 1, -1, 0, 0, 0, 0, 1)
+        return _annotate_cf(_CF.from_int(0), ("cf_sub", x, y))
+    return _annotate_cf(_bihomographic(x, y, 0, 1, -1, 0, 0, 0, 0, 1), ("cf_sub", x, y))
 
 
 def cf_mul(x: CF, y: CF) -> CF:
@@ -1000,12 +1004,12 @@ def cf_mul(x: CF, y: CF) -> CF:
     if x is y:
         result = _periodic_square(x)
         if result is not None:
-            return result
+            return _annotate_cf(result, ("cf_mul", x, y))
     elif x.is_periodic() and y.is_periodic():
         result = _periodic_mul(x, y)
         if result is not None:
-            return result
-    return _bihomographic(x, y, 1, 0, 0, 0, 0, 0, 0, 1)
+            return _annotate_cf(result, ("cf_mul", x, y))
+    return _annotate_cf(_bihomographic(x, y, 1, 0, 0, 0, 0, 0, 0, 1), ("cf_mul", x, y))
 
 
 def cf_div(x: CF, y: CF) -> CF:
@@ -1017,8 +1021,8 @@ def cf_div(x: CF, y: CF) -> CF:
     if x is y:
         from .core import CF as _CF
 
-        return _CF.from_int(1)
-    return _bihomographic(x, y, 0, 1, 0, 0, 0, 0, 1, 0)
+        return _annotate_cf(_CF.from_int(1), ("cf_div", x, y))
+    return _annotate_cf(_bihomographic(x, y, 0, 1, 0, 0, 0, 0, 1, 0), ("cf_div", x, y))
 
 
 def cf_min(x: CF, y: CF) -> CF:

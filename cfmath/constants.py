@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+from functools import lru_cache
 from typing import Any, Iterator
 
-from ._backend import _HAS_MPMATH, _lazy_cf, _mpmath_cf
+from ._backend import _HAS_MPMATH, _annotate_cf, _lazy_cf, _mpmath_cf
 from .core import CF
 
 # ---------------------------------------------------------------------------
@@ -12,9 +13,10 @@ from .core import CF
 # ---------------------------------------------------------------------------
 
 
+@lru_cache(maxsize=None)
 def Phi() -> CF:
     """Golden ratio φ = (1 + sqrt(5))/2 = [1; 1, 1, 1, ...]"""
-    return CF([1], repeating=[1])
+    return _annotate_cf(CF([1], repeating=[1]), ("Phi",))
 
 
 def _e_terms() -> Iterator[int]:
@@ -30,9 +32,10 @@ def _e_terms() -> Iterator[int]:
         k += 1
 
 
+@lru_cache(maxsize=None)
 def E() -> CF:
     """Euler's number e = [2; 1, 2, 1, 1, 4, 1, 1, 6, ...]"""
-    return CF([2], _source=_e_terms())
+    return _annotate_cf(CF([2], _source=_e_terms()), ("E",))
 
 
 # ---------------------------------------------------------------------------
@@ -49,14 +52,17 @@ def _four_over_pi_gen() -> Iterator[tuple[int, int]]:
         a += 1
 
 
+@lru_cache(maxsize=None)
 def Pi() -> CF:
     """π = [3; 7, 15, 1, 292, ...]"""
-    return 4 / CF.from_generalized_cf(_four_over_pi_gen())
+    return _annotate_cf(4 / CF.from_generalized_cf(_four_over_pi_gen()), ("Pi",))
 
 
+@lru_cache(maxsize=None)
 def Tau() -> CF:
     """τ = 2π ≈ [6; 3, 1, 1, 7, 2, 146, 3, 6, ...]"""
-    return CF.from_int(2) * Pi()
+    pi = Pi()
+    return _annotate_cf(CF.from_int(2) * pi, ("Tau", pi))
 
 
 # ---------------------------------------------------------------------------
@@ -64,6 +70,7 @@ def Tau() -> CF:
 # ---------------------------------------------------------------------------
 
 
+@lru_cache(maxsize=None)
 def EulerGamma() -> CF:
     """Euler-Mascheroni constant γ ≈ [0; 1, 1, 2, 1, 2, 1, 4, 3, 13, ...]
 
@@ -75,7 +82,7 @@ def EulerGamma() -> CF:
 
         return mpmath.euler
 
-    return _mpmath_cf(_val)
+    return _mpmath_cf(_val, debug_source=("EulerGamma",))
 
 
 # ---------------------------------------------------------------------------
@@ -126,6 +133,7 @@ def _catalan_terms_from_decimal(n_terms: int) -> list[int]:
     return terms
 
 
+@lru_cache(maxsize=None)
 def Catalan() -> CF:
     """Catalan's constant G ≈ [0; 1, 10, 1, 8, 1, 88, 4, 1, 1, 14, ...]
 
@@ -138,8 +146,8 @@ def Catalan() -> CF:
 
             return mpmath.catalan
 
-        return _mpmath_cf(_val)
-    return _lazy_cf(_catalan_terms_from_decimal)
+        return _mpmath_cf(_val, debug_source=("Catalan",))
+    return _lazy_cf(_catalan_terms_from_decimal, debug_source=("Catalan",))
 
 
 # ---------------------------------------------------------------------------
@@ -191,6 +199,7 @@ def _apery_terms_from_decimal(n_terms: int) -> list[int]:
     return terms
 
 
+@lru_cache(maxsize=None)
 def Apery() -> CF:
     """Apéry's constant ζ(3) ≈ [1; 4, 1, 18, 1, 1, 1, 4, 1, 9, 9, 2, ...]
 
@@ -203,8 +212,8 @@ def Apery() -> CF:
 
             return mpmath.apery
 
-        return _mpmath_cf(_val)
-    return _lazy_cf(_apery_terms_from_decimal)
+        return _mpmath_cf(_val, debug_source=("Apery",))
+    return _lazy_cf(_apery_terms_from_decimal, debug_source=("Apery",))
 
 
 # ---------------------------------------------------------------------------
@@ -242,6 +251,7 @@ def _plastic_terms(n_terms: int) -> list[int]:
     return terms
 
 
+@lru_cache(maxsize=None)
 def Plastic() -> CF:
     """Plastic constant ρ ≈ [1; 3, 12, 1, 1, 3, 2, 3, 2, 4, ...]
 
@@ -255,8 +265,8 @@ def Plastic() -> CF:
 
             return mpmath.findroot(lambda z: z**3 - z - 1, mpmath.mpf("1.3"))
 
-        return _mpmath_cf(_val)
-    return _lazy_cf(_plastic_terms)
+        return _mpmath_cf(_val, debug_source=("Plastic",))
+    return _lazy_cf(_plastic_terms, debug_source=("Plastic",))
 
 
 # ---------------------------------------------------------------------------
@@ -264,6 +274,7 @@ def Plastic() -> CF:
 # ---------------------------------------------------------------------------
 
 
+@lru_cache(maxsize=None)
 def Khinchin() -> CF:
     """Khinchin's constant K ≈ [2; 1, 2, 5, 1, 1, 2, 1, 1, 3, ...]
 
@@ -278,4 +289,4 @@ def Khinchin() -> CF:
 
         return mpmath.khinchin
 
-    return _mpmath_cf(_val)
+    return _mpmath_cf(_val, debug_source=("Khinchin",))

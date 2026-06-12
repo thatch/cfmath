@@ -5,7 +5,7 @@ from __future__ import annotations
 from fractions import Fraction
 from typing import Iterator
 
-from ._backend import _HAS_MPMATH, _coerce_trig_arg, _lazy_cf
+from ._backend import _HAS_MPMATH, _annotate_cf, _coerce_trig_arg, _lazy_cf
 from .core import CF
 
 # ---------------------------------------------------------------------------
@@ -166,11 +166,11 @@ def Sinh(x: int | Fraction) -> CF:
     """
     x = _coerce_trig_arg(x)
     if x == 0:
-        return CF.from_int(0)
+        return _annotate_cf(CF.from_int(0), ("Sinh", x))
     num, den = x.numerator, x.denominator
     if _HAS_MPMATH:
-        return _lazy_cf(lambda n: _sinh_terms_mpmath(num, den, n))
-    return _lazy_cf(lambda n: _sinh_terms_from_decimal(num, den, n))
+        return _lazy_cf(lambda n: _sinh_terms_mpmath(num, den, n), debug_source=("Sinh", x))
+    return _lazy_cf(lambda n: _sinh_terms_from_decimal(num, den, n), debug_source=("Sinh", x))
 
 
 def Cosh(x: int | Fraction) -> CF:
@@ -187,11 +187,11 @@ def Cosh(x: int | Fraction) -> CF:
     """
     x = _coerce_trig_arg(x)
     if x == 0:
-        return CF.from_int(1)
+        return _annotate_cf(CF.from_int(1), ("Cosh", x))
     num, den = x.numerator, x.denominator
     if _HAS_MPMATH:
-        return _lazy_cf(lambda n: _cosh_terms_mpmath(num, den, n))
-    return _lazy_cf(lambda n: _cosh_terms_from_decimal(num, den, n))
+        return _lazy_cf(lambda n: _cosh_terms_mpmath(num, den, n), debug_source=("Cosh", x))
+    return _lazy_cf(lambda n: _cosh_terms_from_decimal(num, den, n), debug_source=("Cosh", x))
 
 
 def Tanh(x: int | Fraction) -> CF:
@@ -209,5 +209,5 @@ def Tanh(x: int | Fraction) -> CF:
     """
     x = _coerce_trig_arg(x)
     if x == 0:
-        return CF.from_int(0)
-    return CF.from_rational(x) / CF.from_generalized_cf(_tanh_pairs(x))
+        return _annotate_cf(CF.from_int(0), ("Tanh", x))
+    return _annotate_cf(CF.from_rational(x) / CF.from_generalized_cf(_tanh_pairs(x)), ("Tanh", x))

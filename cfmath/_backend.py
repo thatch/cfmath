@@ -27,6 +27,7 @@ def _lazy_cf(
     compute: Callable[[int], list[int]],
     initial: int = 60,
     batch: int = 50,
+    debug_source: Any | None = None,
 ) -> CF:
     """Build a lazily-extending CF from a batch-compute function.
 
@@ -46,7 +47,17 @@ def _lazy_cf(
             yield from more[offset:]
             offset = len(more)
 
-    return CF(static, _source=_more())
+    cf = CF(static, _source=_more())
+    if debug_source is not None:
+        cf._debug_source = debug_source
+    return cf
+
+
+def _annotate_cf(cf: CF, debug_source: Any | None) -> CF:
+    """Attach debugging provenance to a CF and return it."""
+    if debug_source is not None:
+        cf._debug_source = debug_source
+    return cf
 
 
 def _extract_cf_terms(x: Any, guard_bits: int = 64) -> list[int]:
@@ -94,6 +105,7 @@ def _mpmath_cf(
     initial_dps: int = 100,
     scale: float = 2.0,
     guard_bits: int = 64,
+    debug_source: Any | None = None,
 ) -> CF:
     """Build a lazy CF from an mpmath value function with automatic precision management.
 
@@ -153,7 +165,10 @@ def _mpmath_cf(
 
             cur_lo = cur_hi
 
-    return CF(static, _source=_source())
+    cf = CF(static, _source=_source())
+    if debug_source is not None:
+        cf._debug_source = debug_source
+    return cf
 
 
 def _coerce_trig_arg(x: int | Fraction) -> Fraction:

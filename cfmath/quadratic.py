@@ -16,6 +16,8 @@ from __future__ import annotations
 import math
 from typing import TYPE_CHECKING
 
+from ._backend import _annotate_cf
+
 if TYPE_CHECKING:
     from .core import CF
 
@@ -38,7 +40,7 @@ def Sqrt(n: int) -> "CF":
         raise ValueError("sqrt of negative number")
     a0 = math.isqrt(n)
     if a0 * a0 == n:
-        return _CF.from_int(a0)
+        return _annotate_cf(_CF.from_int(a0), ("Sqrt", n))
 
     # Standard algorithm for periodic CF of sqrt(n)
     # Invariant: sqrt(n) = (sqrt(n) + m) / d
@@ -52,7 +54,7 @@ def Sqrt(n: int) -> "CF":
         if a == 2 * a0:
             break
 
-    return _CF([a0], repeating=period)
+    return _annotate_cf(_CF([a0], repeating=period), ("Sqrt", n))
 
 
 # ---------------------------------------------------------------------------
