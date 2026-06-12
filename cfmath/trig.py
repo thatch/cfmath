@@ -92,6 +92,40 @@ def _tan_cf_reduced(r: CF, half_pi: CF) -> CF:
     return _tan_cf_small_positive(r)
 
 
+def _sin_meta_gcf_terms() -> Iterator[tuple[list[int], list[int]]]:
+    """Yield (b_poly, a_poly) for the Lambert GCF of sin(x)/x with z = x².
+
+    sin(x)/x = 1 / (1 + z/(6−z + 6z/(20−z + 20z/(42−z + ···))))
+
+    Level 0: b=1, a=z          →  b_poly=[1],     a_poly=[0, 1]
+    Level k: b=c−z, a=c·z      →  b_poly=[c, −1], a_poly=[0, c]   c = 2k(2k+1)
+
+    a_poly is always positive (c·z > 0 for z > 0), so the Gosper homographic
+    state has no pole in the tail range [1, ∞).  b_poly[1] = −1 means
+    b = c − z can be negative when z > c, which occurs for z > 6 (k=1 gives
+    c=6).  The reduction in SinCF keeps z < (π−1)² < 5 so this never fires.
+    """
+    yield ([1], [0, 1])
+    k = 1
+    while True:
+        c = 2 * k * (2 * k + 1)
+        yield ([c, -1], [0, c])
+        k += 1
+
+
+def _sin_cf_positive(r: CF, pi: CF) -> CF:
+    """Return sin(r) for r in (0, π) using the sin/x meta-GCF with z = r².
+
+    Reduces r > 1 via sin(r) = sin(π − r), keeping z < (π−1)² < 5 so that
+    all b terms in the GCF stay positive and the Gosper state has no pole.
+    """
+    from .gosper import cf_metaGCF
+
+    if r > CF.from_int(1):
+        r = pi - r
+    return r / cf_metaGCF(r * r, _sin_meta_gcf_terms())
+
+
 def _sin_pairs(x: Fraction) -> Iterator[tuple[Fraction, Fraction]]:
     """Yield (b_n, a_{n+1}) pairs for the generalized CF of sin(x)/x."""
     x2 = x * x
@@ -248,8 +282,13 @@ def SinGCF(x: int | Fraction) -> CF:
     return _annotate_cf(CF.from_rational(x) / CF.from_generalized_cf(_sin_pairs(x)), ("Sin", x))
 
 
-def SinCF(x: int | Fraction | CF, mode: TrigMode | str | None = None) -> CF:
-    """Sine of x, using ``TanCF(x/2)`` when the meta-CF path applies."""
+def SinCF(x: int | Fraction | CF) -> CF:
+    """Sine of x using the sin/x meta-GCF with z = x².
+
+    Reduces x modulo 2π, then maps to (0, 1] or (0, π−1] via
+    sin(r) = sin(π − r), keeping z = r² < 5 so the GCF has no pole.
+    Accepts int, Fraction, or CF input.
+    """
     x = _coerce_meta_trig_arg(x)
     if x == CF.from_int(0):
         return CF.from_int(0)
@@ -259,16 +298,41 @@ def SinCF(x: int | Fraction | CF, mode: TrigMode | str | None = None) -> CF:
     pi = Pi()
     tau = 2 * pi
     k = _cf_floor((x + pi) / tau)
-    r = x - k * tau
+    r = x - k * tau  # r in [−π, π)
     if r == CF.from_int(0):
         return CF.from_int(0)
+    if r < CF.from_int(0):
+        return -_sin_cf_positive(-r, pi)
+    return _sin_cf_positive(r, pi)
 
-    t = TanCF(r / 2, mode=mode)
-    return 2 * t / (1 + t * t)
 
+def SinMP(x: int | Fraction | CF) -> CF:
+    """Sine of x using mpmath term extraction.
 
-def SinMP(x: int | Fraction) -> CF:
-    """Sine of x using mpmath term extraction."""
+    For int/Fraction input, extracts CF terms directly from mpmath.sin.
+    For CF input, first approximates x via a convergent deep enough to
+    make the rational-approximation error negligible at working precision,
+    then uses dual-precision verification to emit only confirmed terms.
+    """
+    if isinstance(x, CF):
+        import mpmath
+
+        from ._backend import _mpmath_cf
+        from .convergents import convergent
+
+        def _value_fn() -> object:
+            dps = mpmath.mp.dps
+            depth = max(5 * dps, 60)
+            try:
+                approx = convergent(x, depth)
+            except IndexError:
+                approx = x.to_fraction()
+            return mpmath.sin(
+                mpmath.mpf(approx.numerator) / mpmath.mpf(approx.denominator)
+            )
+
+        return _mpmath_cf(_value_fn)
+
     x = _coerce_trig_arg(x)
     if x == 0:
         return CF.from_int(0)
@@ -287,7 +351,7 @@ def Sin(x: int | Fraction | CF, mode: TrigMode | str | None = None) -> CF:
     if mode is TrigMode.CF:
         return SinCF(x)
     if mode is TrigMode.MP:
-        return SinMP(x)  # type: ignore[arg-type]
+        return SinMP(x)
     raise AssertionError(f"unhandled trig mode {mode!r}")
 
 
