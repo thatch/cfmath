@@ -20,7 +20,7 @@ from .polyratio import PolyTransform
 from .power import Cuberoot, Nthroot, Pow, PowCF, PowIntExponent, PowInterval, PowMode, PowMP
 from .quadratic import Sqrt
 from .special import Gamma, Zeta
-from .trig import Cos, CosCF, CosGCF, CosMP, Sin, SinCF, SinGCF, SinMP, Tan, TanCF, TanGCF, TanMP, TrigMode
+from .trig import Cos, Sin, Tan, TrigMode
 
 __all__ = [
     "CF",
@@ -49,17 +49,8 @@ __all__ = [
     "Log2",
     "Ln",
     "Sin",
-    "SinGCF",
-    "SinCF",
-    "SinMP",
     "Cos",
-    "CosGCF",
-    "CosCF",
-    "CosMP",
     "Tan",
-    "TanGCF",
-    "TanCF",
-    "TanMP",
     "TrigMode",
     "Arcsin",
     "Arccos",

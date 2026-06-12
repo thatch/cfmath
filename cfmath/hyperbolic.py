@@ -11,6 +11,7 @@ from ._backend import (
     _cf_terms_from_interval_approximator,
     _coerce_trig_arg,
     _lazy_cf,
+    _mpmath_cf_for_cf_arg,
 )
 from .core import CF
 
@@ -148,7 +149,7 @@ def _tanh_terms_mpmath(x_num: int, x_den: int, n_terms: int) -> list[int]:
 # ---------------------------------------------------------------------------
 
 
-def Sinh(x: int | Fraction) -> CF:
+def Sinh(x: int | Fraction | CF) -> CF:
     """Hyperbolic sine of x, as a continued fraction.
 
     x may be an int or Fraction.  Returns CF([0]) for x=0.
@@ -160,6 +161,10 @@ def Sinh(x: int | Fraction) -> CF:
         Sinh(1)                 # [1; 6, 2, 20, 1, ...]
         Sinh(Fraction(1, 2))    # [0; 2, 5, 1, 1, ...]
     """
+    if isinstance(x, CF):
+        from .exponential import ExpCF
+        e = ExpCF(x)
+        return (e - 1 / e) / 2
     x = _coerce_trig_arg(x)
     if x == 0:
         return _annotate_cf(CF.from_int(0), ("Sinh", x))
@@ -169,7 +174,7 @@ def Sinh(x: int | Fraction) -> CF:
     return _lazy_cf(lambda n: _sinh_terms_from_decimal(num, den, n), debug_source=("Sinh", x))
 
 
-def Cosh(x: int | Fraction) -> CF:
+def Cosh(x: int | Fraction | CF) -> CF:
     """Hyperbolic cosine of x, as a continued fraction.
 
     x may be an int or Fraction.  Returns CF([1]) for x=0.
@@ -181,6 +186,10 @@ def Cosh(x: int | Fraction) -> CF:
         Cosh(1)                 # [1; 1, 1, 3, 1, ...]
         Cosh(Fraction(1, 2))    # [1; 12, 1, 2, ...]
     """
+    if isinstance(x, CF):
+        from .exponential import ExpCF
+        e = ExpCF(x)
+        return (e + 1 / e) / 2
     x = _coerce_trig_arg(x)
     if x == 0:
         return _annotate_cf(CF.from_int(1), ("Cosh", x))
@@ -190,7 +199,7 @@ def Cosh(x: int | Fraction) -> CF:
     return _lazy_cf(lambda n: _cosh_terms_from_decimal(num, den, n), debug_source=("Cosh", x))
 
 
-def Tanh(x: int | Fraction) -> CF:
+def Tanh(x: int | Fraction | CF) -> CF:
     """Hyperbolic tangent of x, as a continued fraction.
 
     x may be an int or Fraction.  Returns CF([0]) for x=0.
@@ -203,6 +212,9 @@ def Tanh(x: int | Fraction) -> CF:
         Tanh(1)                 # [0; 1, 3, 5, 7, ...]
         Tanh(Fraction(1, 2))    # [0; 2, 6, 10, 14, ...]
     """
+    if isinstance(x, CF):
+        import mpmath
+        return _mpmath_cf_for_cf_arg(x, mpmath.tanh)
     x = _coerce_trig_arg(x)
     if x == 0:
         return _annotate_cf(CF.from_int(0), ("Tanh", x))

@@ -12,8 +12,16 @@ import pytest
 pytest.importorskip("pytest_benchmark")
 
 from cfmath import Pi
-from cfmath.arctrig import Arctan, ArctanCF, ArctanGCF, ArctanMP
-from cfmath.trig import Cos, CosCF, CosGCF, CosMP, Sin, SinCF, SinGCF, SinMP, Tan, TanCF, TanGCF, TanMP
+from cfmath.archyperbolic import Arccosh, Arcsinh, Arctanh
+from cfmath.arctrig import Arccos, Arcsin, Arctan, ArctanCF, ArctanGCF, ArctanMP
+from cfmath.hyperbolic import Cosh, Sinh, Tanh
+from cfmath.quadratic import Sqrt
+from cfmath.trig import (
+    Cos, Sin, Tan,
+    _CosCF as CosCF, _CosGCF as CosGCF, _CosMP as CosMP,
+    _SinCF as SinCF, _SinGCF as SinGCF, _SinMP as SinMP,
+    _TanCF as TanCF, _TanGCF as TanGCF, _TanMP as TanMP,
+)
 
 RATIONAL_X = Fraction(1, 3)
 CF_X = Pi() + RATIONAL_X
@@ -122,5 +130,68 @@ def test_bench_arctan_rational_paths(benchmark, factory, terms):
     ),
 )
 def test_bench_trig_cf_input_paths(benchmark, factory, terms):
+    result = benchmark(lambda: factory(terms))
+    assert len(result) == terms
+
+
+# CF-input benchmarks for functions newly accepting CF (Option A: mpmath fallback)
+# CF_X = Pi() + 1/3 ≈ 3.47, kept in domain for all functions below.
+# For arcsin/arccos we need |x| ≤ 1 so we use a separate CF_X_SMALL = Sqrt(2)/2.
+CF_X_SMALL = Sqrt(2) / 2  # ≈ 0.707, in domain for arcsin/arccos
+
+
+# Option A (mpmath convergent) vs Option B (ExpCF) for hyperbolic CF input
+@pytest.mark.benchmark(group="hyperbolic-cf-input", max_time=0.1, min_rounds=3)
+@pytest.mark.parametrize(
+    ("factory", "terms"),
+    _params(
+        [
+            ("sinh-exp-cf", lambda: Sinh(CF_X)),    # Option B: (ExpCF ± 1/ExpCF)/2
+            ("cosh-exp-cf", lambda: Cosh(CF_X)),    # Option B
+            ("tanh-mp",     lambda: Tanh(CF_X)),    # Option A: mpmath fallback
+        ],
+        CF_TERM_COUNTS,
+    ),
+)
+def test_bench_hyperbolic_cf_input(benchmark, factory, terms):
+    result = benchmark(lambda: factory(terms))
+    assert len(result) == terms
+
+
+@pytest.mark.benchmark(group="archyperbolic-cf-input", max_time=0.1, min_rounds=3)
+@pytest.mark.parametrize(
+    ("factory", "terms"),
+    _params(
+        [
+            ("arcsinh-mp", lambda: Arcsinh(CF_X)),      # Option A
+            ("arccosh-mp", lambda: Arccosh(CF_X)),      # Option A
+            ("arctanh-mp", lambda: Arctanh(CF_X_SMALL)), # Option A
+        ],
+        CF_TERM_COUNTS,
+    ),
+)
+def test_bench_archyperbolic_cf_input(benchmark, factory, terms):
+    result = benchmark(lambda: factory(terms))
+    assert len(result) == terms
+
+
+# Option A (ArctanMP) vs Option C (ArctanCF) for arctrig CF input
+@pytest.mark.benchmark(group="arctrig-cf-input", max_time=0.1, min_rounds=3)
+@pytest.mark.parametrize(
+    ("factory", "terms"),
+    _params(
+        [
+            ("arctan-cf",  lambda: ArctanCF(CF_X)),   # Option C: meta-GCF
+            ("arctan-mp",  lambda: ArctanMP(CF_X)),   # Option A: mpmath fallback
+            ("arcsin-mp",  lambda: Arcsin(CF_X_SMALL)), # Option A
+            ("arccos-mp",  lambda: Arccos(CF_X_SMALL)), # Option A
+            ("cos-mp",     lambda: CosMP(CF_X)),       # Option A
+            ("cos-cf",     lambda: CosCF(CF_X)),       # Option B: 1/cos meta-GCF
+            ("tan-mp",     lambda: TanMP(CF_X)),       # Option A
+        ],
+        CF_TERM_COUNTS,
+    ),
+)
+def test_bench_arctrig_cf_input(benchmark, factory, terms):
     result = benchmark(lambda: factory(terms))
     assert len(result) == terms

@@ -6,7 +6,7 @@ from enum import Enum
 from fractions import Fraction
 from typing import Iterator
 
-from ._backend import _annotate_cf, _coerce_trig_arg, _lazy_cf
+from ._backend import _annotate_cf, _coerce_trig_arg, _lazy_cf, _mpmath_cf_for_cf_arg
 from .core import CF
 
 
@@ -113,6 +113,40 @@ def _sin_meta_gcf_terms() -> Iterator[tuple[list[int], list[int]]]:
         k += 1
 
 
+def _cos_meta_gcf_terms() -> Iterator[tuple[list[int], list[int]]]:
+    """Yield (b_poly, a_poly) for the Lambert GCF of 1/cos(x) with z = x².
+
+    1/cos(x) = 1 + z/(2−z + 2z/(12−z + 12z/(30−z + ···)))
+
+    Level 0: b=1, a=z          →  b_poly=[1],     a_poly=[0, 1]
+    Level k: b=c−z, a=c·z      →  b_poly=[c, −1], a_poly=[0, c]   c = (2k−1)(2k)
+
+    a_poly is always positive.  b_poly[1] = −1 means b = c − z turns negative
+    when z > c; for k=1 c=2, so the GCF is unsafe when z > 2 (x > √2 ≈ 1.414).
+    CosCF restricts r ≤ 1 before calling this, keeping z ≤ 1 < 2.
+    """
+    yield ([1], [0, 1])
+    k = 1
+    while True:
+        c = (2 * k - 1) * (2 * k)
+        yield ([c, -1], [0, c])
+        k += 1
+
+
+def _cos_cf_positive(r: CF, half_pi: CF) -> CF:
+    """cos(r) for r in (0, π) via the 1/cos meta-GCF or the sin identity.
+
+    For r ≤ 1: apply 1/cos-GCF with z = r² < 1 < 2, keeping all b terms > 0.
+    For r > 1: cos(r) = sin(π/2 − r), delegating to SinCF which handles the
+               resulting argument in (−π/2, π/2 − 1).
+    """
+    from .gosper import cf_metaGCF
+
+    if r > CF.from_int(1):
+        return _SinCF(half_pi - r)
+    return 1 / cf_metaGCF(r * r, _cos_meta_gcf_terms())
+
+
 def _sin_cf_positive(r: CF, pi: CF) -> CF:
     """Return sin(r) for r in (0, π) using the sin/x meta-GCF with z = r².
 
@@ -200,7 +234,7 @@ def _tan_terms_mpmath(x_num: int, x_den: int, n_terms: int) -> list[int]:
 # ---------------------------------------------------------------------------
 
 
-def TanGCF(x: int | Fraction) -> CF:
+def _TanGCF(x: int | Fraction) -> CF:
     """Tangent of x (in radians), as a continued fraction.
 
     x may be an int or Fraction.  Returns CF([0]) for x=0.
@@ -219,7 +253,10 @@ def TanGCF(x: int | Fraction) -> CF:
     return _annotate_cf(CF.from_rational(x) / denom_cf, ("Tan", x))
 
 
-def TanCF(x: int | Fraction | CF, mode: TrigMode | str | None = None) -> CF:
+_TanGCF.__name__ = _TanGCF.__qualname__ = "TanGCF"
+
+
+def _TanCF(x: int | Fraction | CF, mode: TrigMode | str | None = None) -> CF:
     """Tangent of x, using the experimental meta-CF path.
 
     The direct Lambert meta-CF converges reliably for ``|x| <= 1``.  Larger
@@ -240,12 +277,21 @@ def TanCF(x: int | Fraction | CF, mode: TrigMode | str | None = None) -> CF:
     return _tan_cf_reduced(r, half_pi)
 
 
-def TanMP(x: int | Fraction) -> CF:
+_TanCF.__name__ = _TanCF.__qualname__ = "TanCF"
+
+
+def _TanMP(x: int | Fraction | CF) -> CF:
     """Tangent of x using mpmath term extraction."""
+    if isinstance(x, CF):
+        import mpmath
+        return _mpmath_cf_for_cf_arg(x, mpmath.tan)
     x = _coerce_trig_arg(x)
     if x == 0:
         return CF.from_int(0)
     return _lazy_cf(lambda n: _tan_terms_mpmath(x.numerator, x.denominator, n))
+
+
+_TanMP.__name__ = _TanMP.__qualname__ = "TanMP"
 
 
 def Tan(x: int | Fraction | CF, mode: TrigMode | str | None = None) -> CF:
@@ -253,18 +299,18 @@ def Tan(x: int | Fraction | CF, mode: TrigMode | str | None = None) -> CF:
     mode = _coerce_trig_mode(mode)
     if mode is TrigMode.AUTO:
         if isinstance(x, CF):
-            return TanCF(x)
-        return TanGCF(x)
+            return _TanCF(x)
+        return _TanGCF(x)
     if mode is TrigMode.GCF:
-        return TanGCF(x)  # type: ignore[arg-type]
+        return _TanGCF(x)  # type: ignore[arg-type]
     if mode is TrigMode.CF:
-        return TanCF(x)
+        return _TanCF(x)
     if mode is TrigMode.MP:
-        return TanMP(x)  # type: ignore[arg-type]
+        return _TanMP(x)
     raise AssertionError(f"unhandled trig mode {mode!r}")
 
 
-def SinGCF(x: int | Fraction) -> CF:
+def _SinGCF(x: int | Fraction) -> CF:
     """Sine of x (in radians), as a continued fraction.
 
     x may be an int or Fraction.  Returns CF([0]) for x=0.
@@ -282,7 +328,10 @@ def SinGCF(x: int | Fraction) -> CF:
     return _annotate_cf(CF.from_rational(x) / CF.from_generalized_cf(_sin_pairs(x)), ("Sin", x))
 
 
-def SinCF(x: int | Fraction | CF) -> CF:
+_SinGCF.__name__ = _SinGCF.__qualname__ = "SinGCF"
+
+
+def _SinCF(x: int | Fraction | CF) -> CF:
     """Sine of x using the sin/x meta-GCF with z = x².
 
     Reduces x modulo 2π, then maps to (0, 1] or (0, π−1] via
@@ -306,7 +355,10 @@ def SinCF(x: int | Fraction | CF) -> CF:
     return _sin_cf_positive(r, pi)
 
 
-def SinMP(x: int | Fraction | CF) -> CF:
+_SinCF.__name__ = _SinCF.__qualname__ = "SinCF"
+
+
+def _SinMP(x: int | Fraction | CF) -> CF:
     """Sine of x using mpmath term extraction.
 
     For int/Fraction input, extracts CF terms directly from mpmath.sin.
@@ -339,23 +391,26 @@ def SinMP(x: int | Fraction | CF) -> CF:
     return _lazy_cf(lambda n: _sin_terms_mpmath(x.numerator, x.denominator, n))
 
 
+_SinMP.__name__ = _SinMP.__qualname__ = "SinMP"
+
+
 def Sin(x: int | Fraction | CF, mode: TrigMode | str | None = None) -> CF:
     """Sine of x, dispatching among GCF, CF, and mpmath implementations."""
     mode = _coerce_trig_mode(mode)
     if mode is TrigMode.AUTO:
         if isinstance(x, CF):
-            return SinCF(x)
-        return SinGCF(x)
+            return _SinCF(x)
+        return _SinGCF(x)
     if mode is TrigMode.GCF:
-        return SinGCF(x)  # type: ignore[arg-type]
+        return _SinGCF(x)  # type: ignore[arg-type]
     if mode is TrigMode.CF:
-        return SinCF(x)
+        return _SinCF(x)
     if mode is TrigMode.MP:
-        return SinMP(x)
+        return _SinMP(x)
     raise AssertionError(f"unhandled trig mode {mode!r}")
 
 
-def CosGCF(x: int | Fraction) -> CF:
+def _CosGCF(x: int | Fraction) -> CF:
     """Cosine of x (in radians), as a continued fraction.
 
     x may be an int or Fraction.  Returns CF([1]) for x=0.
@@ -373,8 +428,16 @@ def CosGCF(x: int | Fraction) -> CF:
     return _annotate_cf(CF.from_int(1) / CF.from_generalized_cf(_cos_pairs(x)), ("Cos", x))
 
 
-def CosCF(x: int | Fraction | CF, mode: TrigMode | str | None = None) -> CF:
-    """Cosine of x, using ``TanCF(x/2)`` when the meta-CF path applies."""
+_CosGCF.__name__ = _CosGCF.__qualname__ = "CosGCF"
+
+
+def _CosCF(x: int | Fraction | CF) -> CF:
+    """Cosine of x using the 1/cos meta-GCF with z = x².
+
+    Reduces x modulo 2π, uses even symmetry, then maps r > 1 to
+    sin(π/2 − r) via _SinCF, keeping z = r² < 1 for the cos GCF itself.
+    Accepts int, Fraction, or CF input.
+    """
     x = _coerce_meta_trig_arg(x)
     if x == CF.from_int(0):
         return CF.from_int(1)
@@ -384,21 +447,29 @@ def CosCF(x: int | Fraction | CF, mode: TrigMode | str | None = None) -> CF:
     pi = Pi()
     tau = 2 * pi
     k = _cf_floor((x + pi) / tau)
-    r = x - k * tau
+    r = x - k * tau  # r in [−π, π)
     if r == CF.from_int(0):
         return CF.from_int(1)
+    if r < CF.from_int(0):
+        r = -r  # cos is even
+    return _cos_cf_positive(r, pi / 2)
 
-    t = TanCF(r / 2, mode=mode)
-    t2 = t * t
-    return (1 - t2) / (1 + t2)
+
+_CosCF.__name__ = _CosCF.__qualname__ = "CosCF"
 
 
-def CosMP(x: int | Fraction) -> CF:
+def _CosMP(x: int | Fraction | CF) -> CF:
     """Cosine of x using mpmath term extraction."""
+    if isinstance(x, CF):
+        import mpmath
+        return _mpmath_cf_for_cf_arg(x, mpmath.cos)
     x = _coerce_trig_arg(x)
     if x == 0:
         return CF.from_int(1)
     return _lazy_cf(lambda n: _cos_terms_mpmath(x.numerator, x.denominator, n))
+
+
+_CosMP.__name__ = _CosMP.__qualname__ = "CosMP"
 
 
 def Cos(x: int | Fraction | CF, mode: TrigMode | str | None = None) -> CF:
@@ -406,12 +477,12 @@ def Cos(x: int | Fraction | CF, mode: TrigMode | str | None = None) -> CF:
     mode = _coerce_trig_mode(mode)
     if mode is TrigMode.AUTO:
         if isinstance(x, CF):
-            return CosCF(x)
-        return CosGCF(x)
+            return _CosMP(x)
+        return _CosGCF(x)
     if mode is TrigMode.GCF:
-        return CosGCF(x)  # type: ignore[arg-type]
+        return _CosGCF(x)  # type: ignore[arg-type]
     if mode is TrigMode.CF:
-        return CosCF(x)
+        return _CosCF(x)
     if mode is TrigMode.MP:
-        return CosMP(x)  # type: ignore[arg-type]
+        return _CosMP(x)
     raise AssertionError(f"unhandled trig mode {mode!r}")

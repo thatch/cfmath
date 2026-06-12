@@ -32,7 +32,7 @@ from cfmath import (
 from cfmath.arctrig import ArctanCF
 from cfmath.exponential import ExpCF
 from cfmath.logarithm import LnCF, Log10CF, Log2CF, LogCF
-from cfmath.trig import CosCF, SinCF, TanCF
+from cfmath.trig import _CosCF as CosCF, _SinCF as SinCF, _TanCF as TanCF
 
 
 def test_pi_squared_5th_convergent():
@@ -102,18 +102,10 @@ def test_cf_inputs_are_accepted_by_cf_variants():
 
 
 def test_cf_inputs_are_rejected_by_rational_only_functions():
+    # Gamma is the only remaining function that still requires int | Fraction.
+    # The arc-trig, hyperbolic, and inverse-hyperbolic functions now accept CF.
     funcs = [
-        Arccos,
-        Arcsin,
-        Arctan,
-        ArctanCF,
-        Arccosh,
-        Arcsinh,
-        Arctanh,
-        Cosh,
         Gamma,
-        Sinh,
-        Tanh,
     ]
     for fn in funcs:
         with pytest.raises(TypeError):
