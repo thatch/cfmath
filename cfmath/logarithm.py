@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from fractions import Fraction
+from functools import lru_cache
 from typing import Iterator
 
 from ._backend import _HAS_MPMATH, _annotate_cf, _lazy_cf
@@ -23,6 +24,23 @@ def _ln1p_meta_gcf_terms() -> Iterator[tuple[list[int], list[int]]]:
     while True:
         yield ([-n, n + 1], [0, (n + 1) ** 2])
         n += 1
+
+
+def _atanh_meta_gcf_terms() -> Iterator[tuple[list[int], list[int]]]:
+    """Yield polynomial terms for atanh(1/z)'s generalized meta-GCF.
+
+    atanh(1/z) = 1 / H(z) where
+        H_k(z) = (2k+1)z - (k+1)^2 / H_{k+1}(z)
+
+    WARNING: the negative, growing a_poly = [-(k+1)^2] causes the homographic
+    state to develop a pole inside the [1, ∞) tail range after a few emitted
+    terms.  The meta-GCF algorithm cannot resolve this and will stall.  This
+    iterator is kept for reference; do not use it with cf_metaGCF.
+    """
+    k = 0
+    while True:
+        yield ([0, 2 * k + 1], [-(k + 1) ** 2])
+        k += 1
 
 
 def _ln_terms_from_decimal(x_num: int, x_den: int, n_terms: int) -> list[int]:
@@ -65,7 +83,7 @@ def _ln_terms_from_decimal(x_num: int, x_den: int, n_terms: int) -> list[int]:
             n -= 1
 
         t = (reduced - 1) / (reduced + 1)
-        ln_val = decimal.Decimal(n) * _two_atanh_dec(Fraction(1, 3)) + _two_atanh_dec(t)
+        ln_val = decimal.Decimal(n) * _decimal_ln2(prec) + _two_atanh_dec(t)
 
         terms: list[int] = []
         for _ in range(n_terms):
@@ -77,6 +95,29 @@ def _ln_terms_from_decimal(x_num: int, x_den: int, n_terms: int) -> list[int]:
             ln_val = decimal.Decimal(1) / frac
 
     return terms
+
+
+@lru_cache(maxsize=None)
+def _decimal_ln2(prec: int) -> "decimal.Decimal":
+    """Return ln(2) in Decimal at the requested precision."""
+    import decimal
+
+    ctx = decimal.Context(prec=prec, rounding=decimal.ROUND_FLOOR)
+    with decimal.localcontext(ctx):
+        dt = decimal.Decimal(1) / decimal.Decimal(3)
+        dt2 = dt * dt
+        term = dt
+        val = dt
+        eps = decimal.Decimal(10) ** (-(prec - 10))
+        k = 1
+        while True:
+            term *= dt2
+            delta = term / decimal.Decimal(2 * k + 1)
+            val += delta
+            if abs(delta) < eps:
+                break
+            k += 1
+        return 2 * val
 
 
 def _ln_terms_from_mpmath(x_num: int, x_den: int, n_terms: int) -> list[int]:
@@ -150,6 +191,10 @@ def Ln(x: int | Fraction | CF) -> CF:
         raise ValueError("Ln of non-positive number")
     if x == 1:
         return _annotate_cf(CF.from_int(0), ("Ln", x))
+    if x == 2:
+        return _annotate_cf(_ln2_cf(), ("Ln", x))
+    if x == 10:
+        return _annotate_cf(_ln10_cf(), ("Ln", x))
 
     num, den = x.numerator, x.denominator
     if _HAS_MPMATH:
@@ -227,9 +272,44 @@ def _ln1p_cf(u: Fraction | CF) -> CF:
     return 1 / cf_metaGCF(z, _ln1p_meta_gcf_terms())
 
 
+_LN2_PREFIX = (0, 1, 2, 3, 1, 6, 3, 1, 1, 2, 1, 1)
+
+
+@lru_cache(maxsize=1)
 def _ln2_cf() -> CF:
-    """Return ln(2) without using the slow endpoint u = 1 expansion."""
-    return _ln1p_cf(Fraction(1, 2)) + _ln1p_cf(Fraction(1, 3))
+    """Return ln(2) as a cached singleton with a pre-seeded term prefix.
+
+    ln(2) = ln(3/2) + ln(4/3).  The first dozen terms are stored statically
+    so requests up to that depth never touch the meta-GCF.  The lazy tail
+    picks up from where the prefix ends.
+    """
+    lazy = _ln1p_cf(Fraction(1, 2)) + _ln1p_cf(Fraction(1, 3))
+    return CF(list(_LN2_PREFIX), _source=lazy._iter_from(len(_LN2_PREFIX)))
+
+
+@lru_cache(maxsize=1)
+def _ln10_cf() -> CF:
+    """Return ln(10) as a cached singleton built from cheaper pieces."""
+    return 3 * _ln2_cf() + _ln1p_cf(Fraction(1, 4))
+
+
+@lru_cache(maxsize=1)
+def _ln2_cf_machin() -> CF:
+    """Return ln(2) via 7·ln(10/9) − 2·ln(25/24) + 3·ln(81/80).
+
+    Verify: 7(ln10−ln9) − 2(ln25−ln24) + 3(ln81−ln80) collapses to ln(2)·1 +
+    ln(3)·0 + ln(5)·0.
+
+    Each piece uses _ln1p_cf at large z (9, 24, 80), so the meta-GCF converges
+    at roughly (1/81)^k, (1/576)^k, (1/6400)^k — far faster than the z=2,3
+    used by _ln2_cf().  The tradeoff is three meta-GCF calls and more Gosper
+    arithmetic layers vs two calls in _ln2_cf().
+    """
+    return (
+        7 * _ln1p_cf(Fraction(1, 9))
+        - 2 * _ln1p_cf(Fraction(1, 24))
+        + 3 * _ln1p_cf(Fraction(1, 80))
+    )
 
 
 def LnCF(x: int | Fraction | CF) -> CF:
@@ -278,7 +358,7 @@ def LnCF(x: int | Fraction | CF) -> CF:
 
 def Log10CF(x: int | Fraction | CF) -> CF:
     """Common logarithm of x, using ``LnCF``."""
-    return LnCF(x) / LnCF(10)
+    return LnCF(x) / _ln10_cf()
 
 
 def LogCF(x: int | Fraction | CF, base: int | Fraction | CF | None = None) -> CF:
@@ -296,12 +376,21 @@ def LogCF(x: int | Fraction | CF, base: int | Fraction | CF | None = None) -> CF
         if base_value <= 0 or base_value == 1:
             raise ValueError(f"LogCF() base must be positive and ≠ 1, got {base_value}")
         base = base_value
+    if base == Fraction(2):
+        return LnCF(x) / _ln2_cf_machin()
+    if base == Fraction(10):
+        return LnCF(x) / _ln10_cf()
     return LnCF(x) / LnCF(base)
 
 
 def Log2CF(n: int | Fraction | CF) -> CF:
-    """Logarithm base 2 of n, using ``LnCF``."""
-    return LnCF(n) / LnCF(2)
+    """Logarithm base 2 of n, using a hoisted ln(2) denominator."""
+    return LnCF(n) / _ln2_cf_machin()
+
+
+def Log2CFMachin(n: int | Fraction | CF) -> CF:
+    """Logarithm base 2 of n, using LnCF with ln(2) via three-term Machin GCF."""
+    return LnCF(n) / _ln2_cf_machin()
 
 
 def _coerce_log_arg(name: str, x: int | Fraction | CF) -> Fraction | None:

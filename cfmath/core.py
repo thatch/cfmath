@@ -397,7 +397,10 @@ class CF:
                     p_prev1, q_prev1 = self._convergent_cache[-1]
                 self._convergent_cache.append((a * p_prev1 + p_prev2, a * q_prev1 + q_prev2))
                 p_new, q_new = self._convergent_cache[-1]
-                self._float_convergent_cache.append((float(p_new), float(q_new)))
+                try:
+                    self._float_convergent_cache.append((float(p_new), float(q_new)))
+                except OverflowError:
+                    self._float_convergent_cache.append((float("inf"), float("inf")))
 
     def interval(self, n_terms: int) -> tuple[Fraction, Fraction]:
         """Return rational bounds known to contain this CF after n_terms.

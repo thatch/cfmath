@@ -1128,6 +1128,15 @@ def _metaGCF_terms(x: CF, F_iter: Iterator[tuple[list[int], list[int]]]) -> Iter
             x_CHANGED = True
             continue
 
+        # If the lower endpoint is determined but the upper is not (e.g. a pole
+        # produced by negative GCF numerators), narrow the z interval rather
+        # than consuming more GCF levels.  The pole is an artifact of using the
+        # wrong (too large) upper bound; tightening x_i removes it.
+        if not same and n0 is not None and n1 is None:
+            x_i += 1
+            x_CHANGED = True
+            continue
+
         if F_done and same:
             if c0 == 0:
                 return
