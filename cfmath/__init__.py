@@ -15,7 +15,7 @@ from .exponential import Exp
 from .gosper import cf_add, cf_div, cf_homographic, cf_max, cf_min, cf_mul, cf_sub
 from .hyperbolic import Cosh, Sinh, Tanh
 from .logarithm import Ln, Log, Log2, Log10
-from .power import Cuberoot, Pow, Nthroot
+from .power import Cuberoot, Nthroot, Pow
 from .quadratic import Sqrt
 from .special import Gamma, Zeta
 from .trig import Cos, Sin, Tan
