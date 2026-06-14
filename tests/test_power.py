@@ -11,8 +11,8 @@ from cfmath import (
     Nthroot,
     Pow,
     PowCF,
-    PowIntExponent,
     PowInterval,
+    PowIntExponent,
     PowMode,
     PowMP,
     Sqrt,
@@ -25,6 +25,7 @@ from cfmath.power import (
     _integer_kth_root,
     _v_cmp,
 )
+
 
 def _integer_cbrt(n: int) -> int:
     return _integer_kth_root(n, 3)
@@ -297,6 +298,7 @@ class TestPowCF:
     def test_infinite_cf_base_integer_exponent_repeated_squaring(self):
         # Pi**2 via repeated squaring, no log involved
         from cfmath import Pi
+
         pi = Pi()
         result = Pow(pi, 2)
         val = float(convergent(result.take(20), 19))
@@ -304,13 +306,15 @@ class TestPowCF:
 
     def test_infinite_cf_base_integer_exponent_negative(self):
         from cfmath import Pi
+
         result = Pow(Pi(), -1)
         val = float(convergent(result.take(20), 19))
-        assert abs(val - 1/math.pi) < 1e-10
+        assert abs(val - 1 / math.pi) < 1e-10
 
     def test_infinite_cf_base_fraction_exponent(self):
         # sqrt(Pi) via ExpCF/LnCF path
         from cfmath import Pi
+
         result = Pow(Pi(), Fraction(1, 2))
         val = float(convergent(result.take(20), 19))
         assert abs(val - math.sqrt(math.pi)) < 1e-8
@@ -318,14 +322,16 @@ class TestPowCF:
     def test_infinite_cf_base_cf_exponent(self):
         # Pi ** (1/Pi): both infinite CFs
         from cfmath import Pi
+
         pi = Pi()
-        result = Pow(pi, 1/Pi())
+        result = Pow(pi, 1 / Pi())
         val = float(convergent(result.take(20), 19))
-        assert abs(val - math.pi ** (1/math.pi)) < 1e-8
+        assert abs(val - math.pi ** (1 / math.pi)) < 1e-8
 
     def test_pow_cf_base_matches_float(self):
         from cfmath import Pi
         from cfmath.constants import E
+
         # e**Pi (Gelfond's constant)
         result = Pow(E(), Pi())
         val = float(convergent(result.take(20), 19))

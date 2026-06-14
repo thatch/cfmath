@@ -112,12 +112,12 @@ def ExpCF(
         raise TypeError("Unable to coerce x to CF")
     x = x_coerced
 
-    #if x0 == 0 and len(head.terms) == 1:
+    # if x0 == 0 and len(head.terms) == 1:
     if x == CF.from_int(0):
         # Exact zero is the only exponent we can finish before the meta-CF path.
         return _annotate_cf(CF.from_int(1), ("Exp", x))
 
-    #x0 = head.terms[0]
+    # x0 = head.terms[0]
     x0 = x.take(1).terms[0]
     if x0 != 0:
         # Handle integer part of x separately.

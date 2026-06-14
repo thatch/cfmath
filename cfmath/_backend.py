@@ -171,6 +171,7 @@ def _mpmath_cf(
         cf._debug_source = debug_source
     return cf
 
+
 def _cf_terms_from_interval_approximator(
     interval_at_precision: Callable[[int], tuple[Fraction, Fraction]],
     n_terms: int,
@@ -234,6 +235,7 @@ def _mpmath_cf_for_cf_arg(x: CF, fn: Callable[[Any], Any]) -> CF:
     mpmath.sin, mpmath.cosh, mpmath.atan).
     """
     import mpmath
+
     from .convergents import convergent
 
     def _value_fn() -> Any:

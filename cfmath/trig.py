@@ -32,6 +32,7 @@ def _coerce_trig_mode(mode: TrigMode | str | None) -> TrigMode:
             raise ValueError(f"unknown trig mode {mode!r}") from exc
     raise TypeError(f"trig mode expects TrigMode, str, or None, got {type(mode).__name__}")
 
+
 # ---------------------------------------------------------------------------
 # Generalized CF generators (exact, no floating point)
 # ---------------------------------------------------------------------------
@@ -284,6 +285,7 @@ def _TanMP(x: int | Fraction | CF) -> CF:
     """Tangent of x using mpmath term extraction."""
     if isinstance(x, CF):
         import mpmath
+
         return _mpmath_cf_for_cf_arg(x, mpmath.tan)
     x = _coerce_trig_arg(x)
     if x == 0:
@@ -371,17 +373,16 @@ def _SinMP(x: int | Fraction | CF) -> CF:
 
         from ._backend import _mpmath_cf
         from .convergents import convergent
+        x_cf = x
 
         def _value_fn() -> object:
             dps = mpmath.mp.dps
             depth = max(5 * dps, 60)
             try:
-                approx = convergent(x, depth)
+                approx = convergent(x_cf, depth)
             except IndexError:
-                approx = x.to_fraction()
-            return mpmath.sin(
-                mpmath.mpf(approx.numerator) / mpmath.mpf(approx.denominator)
-            )
+                approx = x_cf.to_fraction()
+            return mpmath.sin(mpmath.mpf(approx.numerator) / mpmath.mpf(approx.denominator))
 
         return _mpmath_cf(_value_fn)
 
@@ -462,6 +463,7 @@ def _CosMP(x: int | Fraction | CF) -> CF:
     """Cosine of x using mpmath term extraction."""
     if isinstance(x, CF):
         import mpmath
+
         return _mpmath_cf_for_cf_arg(x, mpmath.cos)
     x = _coerce_trig_arg(x)
     if x == 0:

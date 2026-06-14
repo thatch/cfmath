@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import decimal
 from fractions import Fraction
 from functools import lru_cache
 from typing import Iterator
@@ -39,7 +40,7 @@ def _atanh_meta_gcf_terms() -> Iterator[tuple[list[int], list[int]]]:
     """
     k = 0
     while True:
-        yield ([0, 2 * k + 1], [-(k + 1) ** 2])
+        yield ([0, 2 * k + 1], [-((k + 1) ** 2)])
         k += 1
 
 
@@ -305,11 +306,7 @@ def _ln2_cf_machin() -> CF:
     used by _ln2_cf().  The tradeoff is three meta-GCF calls and more Gosper
     arithmetic layers vs two calls in _ln2_cf().
     """
-    return (
-        7 * _ln1p_cf(Fraction(1, 9))
-        - 2 * _ln1p_cf(Fraction(1, 24))
-        + 3 * _ln1p_cf(Fraction(1, 80))
-    )
+    return 7 * _ln1p_cf(Fraction(1, 9)) - 2 * _ln1p_cf(Fraction(1, 24)) + 3 * _ln1p_cf(Fraction(1, 80))
 
 
 def LnCF(x: int | Fraction | CF) -> CF:

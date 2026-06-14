@@ -171,6 +171,7 @@ def _apery_terms_from_decimal(n_terms: int) -> list[int]:
     C(2k, k) grows like 4^k/√(πk), so consecutive terms have ratio → 1/4, giving
     ~1.66 terms per decimal digit.
     """
+
     def _interval(precision: int) -> tuple[Fraction, Fraction]:
         total = Fraction(0)
         binom = 2  # C(2, 1)

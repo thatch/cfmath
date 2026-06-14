@@ -4,9 +4,9 @@ import math
 from fractions import Fraction
 
 from cfmath import (
+    CF,
     Apery,
     Catalan,
-    CF,
     E,
     EulerGamma,
     Gamma,

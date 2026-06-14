@@ -32,6 +32,7 @@ def _coerce_arctrig_mode(mode: ArctrigMode | str | None) -> ArctrigMode:
             raise ValueError(f"unknown inverse trig mode {mode!r}") from exc
     raise TypeError(f"inverse trig mode expects ArctrigMode, str, or None, got {type(mode).__name__}")
 
+
 # ---------------------------------------------------------------------------
 # Generalized CF generators (exact, no floating point)
 # ---------------------------------------------------------------------------
@@ -169,6 +170,7 @@ def ArctanCF(x: int | Fraction | CF, mode: ArctrigMode | str | None = None) -> C
         return -ArctanCF(-x_cf, mode=mode)
     if x_cf > one:
         from .constants import Pi
+
         return Pi() / 2 - ArctanCF(1 / x_cf, mode=mode)
 
     z = 1 / x_cf  # z ≥ 1
@@ -179,6 +181,7 @@ def ArctanMP(x: int | Fraction | CF) -> CF:
     """Arctangent of x using mpmath term extraction."""
     if isinstance(x, CF):
         import mpmath
+
         return _mpmath_cf_for_cf_arg(x, mpmath.atan)
     x = _coerce_trig_arg(x)
     if x == 0:
@@ -194,9 +197,11 @@ def Arctan(x: int | Fraction | CF, mode: ArctrigMode | str | None = None) -> CF:
             return ArctanCF(x)
         return ArctanGCF(x)
     if mode is ArctrigMode.GCF:
-        return ArctanGCF(x)  # type: ignore[arg-type]
+        if isinstance(x, CF):
+            raise TypeError("ArctanGCF requires int or Fraction, not CF")
+        return ArctanGCF(x)
     if mode is ArctrigMode.CF:
-        return ArctanCF(x)  # type: ignore[arg-type]
+        return ArctanCF(x)
     if mode is ArctrigMode.MP:
         return ArctanMP(x)
     raise AssertionError(f"unhandled inverse trig mode {mode!r}")
@@ -210,6 +215,7 @@ def Arcsin(x: int | Fraction | CF) -> CF:
     """
     if isinstance(x, CF):
         import mpmath
+
         return _mpmath_cf_for_cf_arg(x, mpmath.asin)
     x = _coerce_trig_arg(x)
     if abs(x) > 1:
@@ -227,6 +233,7 @@ def Arccos(x: int | Fraction | CF) -> CF:
     """
     if isinstance(x, CF):
         import mpmath
+
         return _mpmath_cf_for_cf_arg(x, mpmath.acos)
     x = _coerce_trig_arg(x)
     if abs(x) > 1:

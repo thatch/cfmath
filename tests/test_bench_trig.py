@@ -17,10 +17,36 @@ from cfmath.arctrig import Arccos, Arcsin, Arctan, ArctanCF, ArctanGCF, ArctanMP
 from cfmath.hyperbolic import Cosh, Sinh, Tanh
 from cfmath.quadratic import Sqrt
 from cfmath.trig import (
-    Cos, Sin, Tan,
-    _CosCF as CosCF, _CosGCF as CosGCF, _CosMP as CosMP,
-    _SinCF as SinCF, _SinGCF as SinGCF, _SinMP as SinMP,
-    _TanCF as TanCF, _TanGCF as TanGCF, _TanMP as TanMP,
+    Cos,
+    Sin,
+    Tan,
+)
+from cfmath.trig import (
+    _CosCF as CosCF,
+)
+from cfmath.trig import (
+    _CosGCF as CosGCF,
+)
+from cfmath.trig import (
+    _CosMP as CosMP,
+)
+from cfmath.trig import (
+    _SinCF as SinCF,
+)
+from cfmath.trig import (
+    _SinGCF as SinGCF,
+)
+from cfmath.trig import (
+    _SinMP as SinMP,
+)
+from cfmath.trig import (
+    _TanCF as TanCF,
+)
+from cfmath.trig import (
+    _TanGCF as TanGCF,
+)
+from cfmath.trig import (
+    _TanMP as TanMP,
 )
 
 RATIONAL_X = Fraction(1, 3)
@@ -146,9 +172,9 @@ CF_X_SMALL = Sqrt(2) / 2  # ≈ 0.707, in domain for arcsin/arccos
     ("factory", "terms"),
     _params(
         [
-            ("sinh-exp-cf", lambda: Sinh(CF_X)),    # Option B: (ExpCF ± 1/ExpCF)/2
-            ("cosh-exp-cf", lambda: Cosh(CF_X)),    # Option B
-            ("tanh-mp",     lambda: Tanh(CF_X)),    # Option A: mpmath fallback
+            ("sinh-exp-cf", lambda: Sinh(CF_X)),  # Option B: (ExpCF ± 1/ExpCF)/2
+            ("cosh-exp-cf", lambda: Cosh(CF_X)),  # Option B
+            ("tanh-mp", lambda: Tanh(CF_X)),  # Option A: mpmath fallback
         ],
         CF_TERM_COUNTS,
     ),
@@ -163,9 +189,9 @@ def test_bench_hyperbolic_cf_input(benchmark, factory, terms):
     ("factory", "terms"),
     _params(
         [
-            ("arcsinh-mp", lambda: Arcsinh(CF_X)),      # Option A
-            ("arccosh-mp", lambda: Arccosh(CF_X)),      # Option A
-            ("arctanh-mp", lambda: Arctanh(CF_X_SMALL)), # Option A
+            ("arcsinh-mp", lambda: Arcsinh(CF_X)),  # Option A
+            ("arccosh-mp", lambda: Arccosh(CF_X)),  # Option A
+            ("arctanh-mp", lambda: Arctanh(CF_X_SMALL)),  # Option A
         ],
         CF_TERM_COUNTS,
     ),
@@ -181,13 +207,13 @@ def test_bench_archyperbolic_cf_input(benchmark, factory, terms):
     ("factory", "terms"),
     _params(
         [
-            ("arctan-cf",  lambda: ArctanCF(CF_X)),   # Option C: meta-GCF
-            ("arctan-mp",  lambda: ArctanMP(CF_X)),   # Option A: mpmath fallback
-            ("arcsin-mp",  lambda: Arcsin(CF_X_SMALL)), # Option A
-            ("arccos-mp",  lambda: Arccos(CF_X_SMALL)), # Option A
-            ("cos-mp",     lambda: CosMP(CF_X)),       # Option A
-            ("cos-cf",     lambda: CosCF(CF_X)),       # Option B: 1/cos meta-GCF
-            ("tan-mp",     lambda: TanMP(CF_X)),       # Option A
+            ("arctan-cf", lambda: ArctanCF(CF_X)),  # Option C: meta-GCF
+            ("arctan-mp", lambda: ArctanMP(CF_X)),  # Option A: mpmath fallback
+            ("arcsin-mp", lambda: Arcsin(CF_X_SMALL)),  # Option A
+            ("arccos-mp", lambda: Arccos(CF_X_SMALL)),  # Option A
+            ("cos-mp", lambda: CosMP(CF_X)),  # Option A
+            ("cos-cf", lambda: CosCF(CF_X)),  # Option B: 1/cos meta-GCF
+            ("tan-mp", lambda: TanMP(CF_X)),  # Option A
         ],
         CF_TERM_COUNTS,
     ),

@@ -163,6 +163,7 @@ def Sinh(x: int | Fraction | CF) -> CF:
     """
     if isinstance(x, CF):
         from .exponential import ExpCF
+
         e = ExpCF(x)
         return (e - 1 / e) / 2
     x = _coerce_trig_arg(x)
@@ -188,6 +189,7 @@ def Cosh(x: int | Fraction | CF) -> CF:
     """
     if isinstance(x, CF):
         from .exponential import ExpCF
+
         e = ExpCF(x)
         return (e + 1 / e) / 2
     x = _coerce_trig_arg(x)
@@ -214,6 +216,7 @@ def Tanh(x: int | Fraction | CF) -> CF:
     """
     if isinstance(x, CF):
         import mpmath
+
         return _mpmath_cf_for_cf_arg(x, mpmath.tanh)
     x = _coerce_trig_arg(x)
     if x == 0:

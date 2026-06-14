@@ -7,19 +7,37 @@ import pytest
 
 from cfmath import Cos, Pi, Sin, Tan, convergent
 from cfmath.trig import (
-    _CosCF as CosCF,
-    _CosGCF as CosGCF,
-    _CosMP as CosMP,
-    _SinCF as SinCF,
-    _SinGCF as SinGCF,
-    _SinMP as SinMP,
-    _TanCF as TanCF,
-    _TanGCF as TanGCF,
-    _TanMP as TanMP,
     TrigMode,
     _cos_terms_mpmath,
     _sin_terms_mpmath,
     _tan_terms_mpmath,
+)
+from cfmath.trig import (
+    _CosCF as CosCF,
+)
+from cfmath.trig import (
+    _CosGCF as CosGCF,
+)
+from cfmath.trig import (
+    _CosMP as CosMP,
+)
+from cfmath.trig import (
+    _SinCF as SinCF,
+)
+from cfmath.trig import (
+    _SinGCF as SinGCF,
+)
+from cfmath.trig import (
+    _SinMP as SinMP,
+)
+from cfmath.trig import (
+    _TanCF as TanCF,
+)
+from cfmath.trig import (
+    _TanGCF as TanGCF,
+)
+from cfmath.trig import (
+    _TanMP as TanMP,
 )
 
 

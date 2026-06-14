@@ -23,11 +23,13 @@ def _ref(p: int, q: int = 1) -> CF:
 class TestMetaGCF:
     def test_finite_rational_value(self):
         z = Fraction(2, 3)
-        terms = iter([
-            ([0, 1], [1]),
-            ([0, 3], [4]),
-            ([0, 5], [1]),
-        ])
+        terms = iter(
+            [
+                ([0, 1], [1]),
+                ([0, 3], [4]),
+                ([0, 5], [1]),
+            ]
+        )
 
         result = cf_metaGCF(CF.from_rational(z), terms).take(20).to_fraction()
         expected = z + Fraction(1, 3 * z + Fraction(4, 5 * z))

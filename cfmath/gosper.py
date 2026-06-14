@@ -48,7 +48,7 @@ from __future__ import annotations
 
 import os
 from fractions import Fraction
-from typing import TYPE_CHECKING, Callable, Iterator
+from typing import TYPE_CHECKING, Any, Callable, Iterator
 
 from ._backend import _annotate_cf
 from .quadratic import _periodic_mul, _periodic_square
@@ -232,10 +232,7 @@ def _homographic_terms(
         # e.g. x - x, narrow gradually with no large term, so it has a gimme.)
         # A long stall therefore means a malformed/non-canonical input; fail loud.
         if stall >= _GIMME_REFINE_CAP:
-            raise ArithmeticError(
-                f"homographic stalled: read {stall} terms without pinning an "
-                f"output term (likely a malformed input)"
-            )
+            raise ArithmeticError(f"homographic stalled: read {stall} terms without pinning an output term (likely a malformed input)")
 
 
 def cf_homographic(x: CF, a: int, b: int, c: int, d: int) -> CF:
@@ -612,7 +609,7 @@ def cf_metaCF_simple(x: CF, F_iter: Iterator[Callable[[CF], CF]]) -> CF:
     return _CF([], _source=_metaCF_simple_terms(x, F_iter))
 
 
-def _poly_eval(coeffs: list[int], inp):
+def _poly_eval(coeffs: list[int], inp: Any) -> Any:
     """Evaluate a low-to-high polynomial at inp."""
     out = 0
     for i, coeff in enumerate(coeffs):
@@ -624,14 +621,14 @@ def _poly_eval(coeffs: list[int], inp):
 def _poly_eval_scaled(coeffs: list[int], p: int, q: int, degree: int) -> int:
     """Evaluate poly(p/q) * q**degree without constructing a Fraction."""
     if len(coeffs) == 1:
-        return coeffs[0] * q**degree
+        return int(coeffs[0] * q**degree)
     if degree == 1:
         return coeffs[0] * q + coeffs[1] * p
 
     out = 0
     for i, coeff in enumerate(coeffs):
         if coeff:
-            out += coeff * p**i * q**(degree - i)
+            out += coeff * p**i * q ** (degree - i)
     return out
 
 
@@ -681,9 +678,7 @@ def _poly_mul(coeffs0: list[int], coeffs1: list[int]) -> list[int]:
     return out
 
 
-def _meta_emit_value(
-    a: int, b: int, c: int, d: int, term: int
-) -> tuple[int, int, int, int]:
+def _meta_emit_value(a: int, b: int, c: int, d: int, term: int) -> tuple[int, int, int, int]:
     """Subtract term from a homographic state and invert the tail."""
     return c, d, a - term * c, b - term * d
 
@@ -774,9 +769,7 @@ def _metaCF_rebuild_polys(
     pa, pb, pc, pd = list(term), [1], [1], [0]
     emit_idx = 0
 
-    emit_idx, pa, pb, pc, pd = _meta_apply_poly_emits(
-        emits, emit_idx, 1, pa, pb, pc, pd
-    )
+    emit_idx, pa, pb, pc, pd = _meta_apply_poly_emits(emits, emit_idx, 1, pa, pb, pc, pd)
     for term_idx in range(1, len(terms)):
         term, _ = terms[term_idx]
         old_pa, old_pb, old_pc, old_pd = pa, pb, pc, pd
@@ -784,9 +777,7 @@ def _metaCF_rebuild_polys(
         pb = old_pa
         pc = _poly_add(old_pd, _poly_mul(term, old_pc))
         pd = old_pc
-        emit_idx, pa, pb, pc, pd = _meta_apply_poly_emits(
-            emits, emit_idx, term_idx + 1, pa, pb, pc, pd
-        )
+        emit_idx, pa, pb, pc, pd = _meta_apply_poly_emits(emits, emit_idx, term_idx + 1, pa, pb, pc, pd)
 
     return pa, pb, pc, pd
 
@@ -938,18 +929,14 @@ def _metaCF_terms(
         if have_interval:
             scale0 = q0**degree
             term0 = _poly_eval_scaled(term, p0, q0, degree)
-            a0, b0, c0, d0 = _meta_ingest_values(
-                a0, b0, c0, d0, term0, scale0, scale0
-            )
+            a0, b0, c0, d0 = _meta_ingest_values(a0, b0, c0, d0, term0, scale0, scale0)
             n0 = _homo_output_simple(a0, b0, c0, d0)
             if same:
                 a1, b1, c1, d1, n1 = a0, b0, c0, d0, n0
             else:
                 scale1 = q1**degree
                 term1 = _poly_eval_scaled(term, p1, q1, degree)
-                a1, b1, c1, d1 = _meta_ingest_values(
-                    a1, b1, c1, d1, term1, scale1, scale1
-                )
+                a1, b1, c1, d1 = _meta_ingest_values(a1, b1, c1, d1, term1, scale1, scale1)
                 n1 = _homo_output_simple(a1, b1, c1, d1)
         else:
             n0 = n1 = None
@@ -1040,9 +1027,7 @@ def _metaGCF_rebuild_polys(
     b_poly, a_poly, _ = levels[0]
     pa, pb, pc, pd = list(b_poly), list(a_poly), [1], [0]
     emit_idx = 0
-    emit_idx, pa, pb, pc, pd = _meta_apply_poly_emits(
-        emits, emit_idx, 1, pa, pb, pc, pd
-    )
+    emit_idx, pa, pb, pc, pd = _meta_apply_poly_emits(emits, emit_idx, 1, pa, pb, pc, pd)
 
     for level_idx in range(1, len(levels)):
         b_poly, a_poly, _ = levels[level_idx]
@@ -1051,9 +1036,7 @@ def _metaGCF_rebuild_polys(
         pb = _poly_mul(old_pa, a_poly)
         pc = _poly_add(_poly_mul(old_pc, b_poly), old_pd)
         pd = _poly_mul(old_pc, a_poly)
-        emit_idx, pa, pb, pc, pd = _meta_apply_poly_emits(
-            emits, emit_idx, level_idx + 1, pa, pb, pc, pd
-        )
+        emit_idx, pa, pb, pc, pd = _meta_apply_poly_emits(emits, emit_idx, level_idx + 1, pa, pb, pc, pd)
 
     return pa, pb, pc, pd
 
@@ -1162,9 +1145,7 @@ def _metaGCF_terms(x: CF, F_iter: Iterator[tuple[list[int], list[int]]]) -> Iter
             scale0 = q0**degree
             b_term0 = _poly_eval_scaled(b_poly, p0, q0, degree)
             a_term0 = _poly_eval_scaled(a_poly, p0, q0, degree)
-            a0, b0, c0, d0 = _meta_ingest_values(
-                a0, b0, c0, d0, b_term0, a_term0, scale0
-            )
+            a0, b0, c0, d0 = _meta_ingest_values(a0, b0, c0, d0, b_term0, a_term0, scale0)
             n0 = _homo_output(a0, b0, c0, d0)
             if same:
                 a1, b1, c1, d1, n1 = a0, b0, c0, d0, n0
@@ -1172,18 +1153,14 @@ def _metaGCF_terms(x: CF, F_iter: Iterator[tuple[list[int], list[int]]]) -> Iter
                 scale1 = q1**degree
                 b_term1 = _poly_eval_scaled(b_poly, p1, q1, degree)
                 a_term1 = _poly_eval_scaled(a_poly, p1, q1, degree)
-                a1, b1, c1, d1 = _meta_ingest_values(
-                    a1, b1, c1, d1, b_term1, a_term1, scale1
-                )
+                a1, b1, c1, d1 = _meta_ingest_values(a1, b1, c1, d1, b_term1, a_term1, scale1)
                 n1 = _homo_output(a1, b1, c1, d1)
         else:
             n0 = n1 = None
 
         stall += 1
         if stall >= _METACF_STALL_LIMIT:
-            raise ValueError(
-                f"cf_metaGCF stalled: no term emitted after consuming {_METACF_STALL_LIMIT} consecutive pairs"
-            )
+            raise ValueError(f"cf_metaGCF stalled: no term emitted after consuming {_METACF_STALL_LIMIT} consecutive pairs")
 
 
 def cf_metaGCF(x: CF, F: Iterator[tuple[list[int], list[int]]]) -> CF:

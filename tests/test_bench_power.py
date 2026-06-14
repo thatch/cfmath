@@ -12,7 +12,7 @@ import pytest
 pytest.importorskip("pytest_benchmark")
 
 from cfmath import Pi
-from cfmath.power import Pow, PowCF, PowIntExponent, PowInterval, PowMP
+from cfmath.power import Pow, PowCF, PowInterval, PowIntExponent, PowMP
 
 RATIONAL_BASE = 2
 RATIONAL_EXPONENT = Fraction(2, 5)

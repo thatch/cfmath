@@ -19,6 +19,7 @@ def _arcsinh_terms_from_decimal(x_num: int, x_den: int, n_terms: int) -> list[in
     Works for all real x.
     """
     import decimal
+
     from .logarithm import _decimal_ln2
 
     prec = n_terms * 5 + 80
@@ -74,6 +75,7 @@ def _arccosh_terms_from_decimal(x_num: int, x_den: int, n_terms: int) -> list[in
     Requires x ≥ 1.
     """
     import decimal
+
     from .logarithm import _decimal_ln2
 
     prec = n_terms * 5 + 80
@@ -185,6 +187,7 @@ def Arctanh(x: int | Fraction | CF) -> CF:
     """
     if isinstance(x, CF):
         import mpmath
+
         return _mpmath_cf_for_cf_arg(x, mpmath.atanh)
     x = _coerce_trig_arg(x)
     if abs(x) >= 1:
@@ -205,6 +208,7 @@ def Arcsinh(x: int | Fraction | CF) -> CF:
     """
     if isinstance(x, CF):
         import mpmath
+
         return _mpmath_cf_for_cf_arg(x, mpmath.asinh)
     x = _coerce_trig_arg(x)
     if x == 0:
@@ -223,6 +227,7 @@ def Arccosh(x: int | Fraction | CF) -> CF:
     """
     if isinstance(x, CF):
         import mpmath
+
         return _mpmath_cf_for_cf_arg(x, mpmath.acosh)
     x = _coerce_trig_arg(x)
     if x < 1:

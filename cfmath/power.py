@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import math as _math
 from enum import Enum
-from math import gcd
 from fractions import Fraction
-from typing import Iterator
+from math import gcd
+from typing import Any, Iterator
 
 from ._backend import _HAS_MPMATH, _annotate_cf, _lazy_cf
 from .core import CF
@@ -237,8 +237,14 @@ def _v_cmp(px: int, qx: int, py: int, qy: int, t: Fraction) -> int:
 
 
 def _floor_at_corner(
-    a: int, b: int, c: int, d: int,
-    px: int, qx: int, py: int, qy: int,
+    a: int,
+    b: int,
+    c: int,
+    d: int,
+    px: int,
+    qx: int,
+    py: int,
+    qy: int,
     n: int,
 ) -> bool:
     """Check floor((a·v+b)/(c·v+d)) == n at v = (px/qx)^(py/qy).
@@ -291,9 +297,9 @@ def _pow_cf_terms(x: CF, y: CF) -> Iterator[int]:
 
     # Convergent state: xp[k+1] = p_k, xq[k+1] = q_k with p_{-1}=1, q_{-1}=0
     x_iter = iter(x)
-    xp: list[int] = [1]   # xp[0] = p_{-1} = 1
-    xq: list[int] = [0]   # xq[0] = q_{-1} = 0
-    xi = 0                 # current depth; xp[-1]/xq[-1] = p_{xi-1}/q_{xi-1}
+    xp: list[int] = [1]  # xp[0] = p_{-1} = 1
+    xq: list[int] = [0]  # xq[0] = q_{-1} = 0
+    xi = 0  # current depth; xp[-1]/xq[-1] = p_{xi-1}/q_{xi-1}
 
     y_iter = iter(y)
     yp: list[int] = [1]
@@ -386,15 +392,14 @@ def _pow_cf_terms(x: CF, y: CF) -> Iterator[int]:
                 # from state magnitude alone.
                 try:
                     import mpmath as _mpmath
+
                     if min_result > 0:
                         cancel = int(-_math.log10(min_result / max_term)) + 20
                     else:
                         cancel = int(_math.log10(max_term)) + 30
                     dps = max(30, min(cancel, 150))
                     with _mpmath.workdps(dps):
-                        vmp = (_mpmath.mpf(px) / _mpmath.mpf(qx)) ** (
-                            _mpmath.mpf(py) / _mpmath.mpf(qy)
-                        )
+                        vmp = (_mpmath.mpf(px) / _mpmath.mpf(qx)) ** (_mpmath.mpf(py) / _mpmath.mpf(qy))
                         d_mp = c * vmp + d
                         if not _mpmath.isfinite(d_mp):
                             bad = True
@@ -433,10 +438,7 @@ def _pow_cf_terms(x: CF, y: CF) -> Iterator[int]:
                 py_max = max(py for _, _, py, _ in corners)
                 qy_max = max(qy for _, _, _, qy in corners)
                 if py_max < 2000 and qy_max < 2000:
-                    if all(
-                        _floor_at_corner(a, b, c, d, px, qx, py, qy, n)
-                        for px, qx, py, qy in corners
-                    ):
+                    if all(_floor_at_corner(a, b, c, d, px, qx, py, qy, n) for px, qx, py, qy in corners):
                         yield n
                         a, b, c, d = c, d, a - n * c, b - n * d
                         stall = 0
@@ -528,7 +530,7 @@ def PowIntExponent(x: PowArg, r: PowArg) -> CF:
         raise ValueError("PowIntExponent requires an integer exponent")
     if isinstance(x, Fraction):
         return CF.from_rational(x**r.numerator)
-    return x ** r.numerator
+    return x**r.numerator
 
 
 def _pow_rational_special(x: Fraction | CF, r: Fraction | CF) -> CF | None:
@@ -591,7 +593,7 @@ def PowMP(x: PowArg, r: PowArg) -> CF:
         mpmath.mp.dps = n_terms * 5 + 80
         depth = n_terms * 2 + 20
 
-        def mp_arg(v: Fraction | CF):
+        def mp_arg(v: Fraction | CF) -> Any:
             if isinstance(v, Fraction):
                 return mpmath.mpf(v.numerator) / mpmath.mpf(v.denominator)
             q = _convergent(v, depth)

@@ -5,11 +5,16 @@ from fractions import Fraction
 
 import pytest
 
-from cfmath import CF, Ln, Log, Log2, Log10, convergent
-from cfmath.logarithm import _ln_terms_from_decimal, _ln_terms_from_mpmath
-from cfmath.quadratic import Sqrt
-from cfmath import Pi
-from cfmath.logarithm import LnCF, Log10CF, Log2CF, LogCF, _ln1p_cf
+from cfmath import CF, Ln, Log, Log2, Log10, Pi, Sqrt, convergent
+from cfmath.logarithm import (
+    LnCF,
+    Log2CF,
+    Log10CF,
+    LogCF,
+    _ln1p_cf,
+    _ln_terms_from_decimal,
+    _ln_terms_from_mpmath,
+)
 
 
 class TestLn:

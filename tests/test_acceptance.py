@@ -1,17 +1,18 @@
 """Acceptance test: 5th convergent of Pi²."""
 
-import mpmath
-import pytest
 from fractions import Fraction
 
+import mpmath
+import pytest
+
 from cfmath import (
-    Arccos,
-    Arcsin,
-    Arctan,
-    Arccosh,
-    Arcsinh,
-    Arctanh,
     CF,
+    Arccos,
+    Arccosh,
+    Arcsin,
+    Arcsinh,
+    Arctan,
+    Arctanh,
     Cos,
     Cosh,
     Exp,
@@ -31,8 +32,10 @@ from cfmath import (
 )
 from cfmath.arctrig import ArctanCF
 from cfmath.exponential import ExpCF
-from cfmath.logarithm import LnCF, Log10CF, Log2CF, LogCF
-from cfmath.trig import _CosCF as CosCF, _SinCF as SinCF, _TanCF as TanCF
+from cfmath.logarithm import LnCF, Log2CF, Log10CF, LogCF
+from cfmath.trig import _CosCF as CosCF
+from cfmath.trig import _SinCF as SinCF
+from cfmath.trig import _TanCF as TanCF
 
 
 def test_pi_squared_5th_convergent():
