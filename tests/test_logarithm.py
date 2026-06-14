@@ -7,6 +7,7 @@ import pytest
 
 from cfmath import CF, Ln, Log, Log2, Log10, convergent
 from cfmath.logarithm import _ln_terms_from_decimal, _ln_terms_from_mpmath
+from cfmath.quadratic import Sqrt
 
 
 class TestLn:
@@ -37,6 +38,31 @@ class TestLn:
     def test_ln_bad_type_raises(self):
         with pytest.raises(TypeError):
             Ln(1.5)
+
+    def test_ln_cf_sqrt2_equals_half_ln2(self):
+        """Ln(sqrt(2)) = Ln(2)/2 since ln(√2) = ½·ln(2)."""
+        v1 = float(convergent(Ln(Sqrt(2)).take(15), 14))
+        v2 = float(convergent((Ln(2) / 2).take(15), 14))
+        assert abs(v1 - v2) < 1e-10
+
+    def test_ln_cf_value(self):
+        """Ln(Sqrt(2)) ≈ 0.3466."""
+        val = float(convergent(Ln(Sqrt(2)).take(15), 14))
+        assert abs(val - math.log(2) / 2) < 1e-10
+
+    def test_ln_cf_pow(self):
+        """2^sqrt(2) = Exp(Sqrt(2) * Ln(2)) — full pow(CF, CF) pipeline."""
+        from cfmath.exponential import Exp
+
+        result = float(convergent(Exp(Sqrt(2) * Ln(2)).take(15), 14))
+        assert abs(result - 2 ** math.sqrt(2)) < 1e-8
+
+    def test_ln_cf_nonpositive_raises(self):
+        """Ln(CF) rejects zero and negative CFs eagerly."""
+        with pytest.raises(ValueError):
+            Ln(CF.from_int(0))
+        with pytest.raises(ValueError):
+            Ln(CF.from_int(-3))
 
     def test_ln_additivity(self):
         """ln(a*b) = ln(a) + ln(b) via CF arithmetic."""

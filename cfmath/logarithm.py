@@ -82,10 +82,8 @@ def _ln_terms_from_cf(x: CF, n_terms: int) -> list[int]:
 
     from .convergents import convergent as _convergent
 
-    dps = n_terms * 4 + 50
-    mpmath.mp.dps = dps
-    depth = n_terms * 2 + 20
-    approx: Fraction = _convergent(x, depth)
+    mpmath.mp.dps = n_terms * 5 + 80
+    approx: Fraction = _convergent(x, n_terms * 2 + 20)
     if approx <= 0:
         raise ValueError("Ln of non-positive number")
     val = mpmath.log(mpmath.mpf(approx.numerator) / mpmath.mpf(approx.denominator))
@@ -103,7 +101,7 @@ def Ln(x: int | Fraction | CF) -> CF:
     x may be a positive int, Fraction, or CF.
     Uses ln(x) = 2·atanh((x-1)/(x+1)) with argument reduction when mpmath
     is unavailable, otherwise delegates to mpmath for speed.
-    CF inputs always require mpmath.
+    CF inputs always require mpmath (used to evaluate a convergent).
 
     Examples::
 
@@ -112,8 +110,15 @@ def Ln(x: int | Fraction | CF) -> CF:
         Ln(Sqrt(2))  # ≈ [0; 2, 1, 2, 1, 4, 1, ...]  (= ln(2)/2)
     """
     if isinstance(x, CF):
+        # Quick non-positive check from the first term alone.
+        # a0 < 0 → definitely negative; a0 == 0 with no further terms → zero.
+        a0 = next(x._iter_from(0))
+        if a0 < 0 or (a0 == 0 and not x.repeating and x._source is None and len(x.terms) == 1):
+            raise ValueError("Ln of non-positive number")
+
         x_cf: CF = x
         return _lazy_cf(lambda n: _ln_terms_from_cf(x_cf, n))
+
     if isinstance(x, int):
         x = Fraction(x)
     elif not isinstance(x, Fraction):
@@ -129,6 +134,37 @@ def Ln(x: int | Fraction | CF) -> CF:
     return _lazy_cf(lambda n: _ln_terms_from_decimal(num, den, n))
 
 
+def _coerce_log_arg(x: int | Fraction | CF) -> Fraction | None:
+    """Return x as a Fraction if it is rational, else None."""
+    if isinstance(x, int):
+        return Fraction(x)
+    if isinstance(x, Fraction):
+        return x
+    if isinstance(x, CF) and x.is_finite():
+        return x.to_fraction()
+    return None
+
+
+def _exact_rational_log(x: Fraction, base: Fraction) -> int | None:
+    """Return k if x == base**k for integer k, else None."""
+    if x <= 0 or base <= 0 or base == 1:
+        return None
+    if x == 1:
+        return 0
+    if base < 1:
+        found = _exact_rational_log(x, 1 / base)
+        return None if found is None else -found
+    if x < 1:
+        found = _exact_rational_log(1 / x, base)
+        return None if found is None else -found
+    power = Fraction(1)
+    k = 0
+    while power < x:
+        power *= base
+        k += 1
+    return k if power == x else None
+
+
 def Log10(x: int | Fraction | CF) -> CF:
     """Common logarithm (base 10) of x, as a continued fraction.
 
@@ -141,6 +177,11 @@ def Log10(x: int | Fraction | CF) -> CF:
         Log10(100)              # [2]
         Log10(2)                # ≈ [0; 3, 3, 9, 2, 1, 1, 2, ...]
     """
+    x_rat = _coerce_log_arg(x)
+    if x_rat is not None:
+        exact = _exact_rational_log(x_rat, Fraction(10))
+        if exact is not None:
+            return CF.from_int(exact)
     return Ln(x) / Ln(10)
 
 
@@ -166,6 +207,11 @@ def Log(x: int | Fraction | CF, base: int | Fraction | None = None) -> CF:
         raise TypeError(f"Log() base expects int or Fraction, got {type(base).__name__}")
     if base <= 0 or base == 1:
         raise ValueError(f"Log() base must be positive and ≠ 1, got {base}")
+    x_rat = _coerce_log_arg(x)
+    if x_rat is not None:
+        exact = _exact_rational_log(x_rat, base)
+        if exact is not None:
+            return CF.from_int(exact)
     return Ln(x) / Ln(base)
 
 
@@ -181,4 +227,9 @@ def Log2(n: int | Fraction | CF) -> CF:
         Log2(4)                 # [2]
         Log2(123)               # [6; 1, 16, 2, 1, 1, 8, ...]
     """
+    n_rat = _coerce_log_arg(n)
+    if n_rat is not None:
+        exact = _exact_rational_log(n_rat, Fraction(2))
+        if exact is not None:
+            return CF.from_int(exact)
     return Ln(n) / Ln(2)
