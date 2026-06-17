@@ -5,8 +5,9 @@ from fractions import Fraction
 
 import pytest
 
-from cfmath import CF, E, Exp, Ln, convergent
-from cfmath.exponential import _exp_terms_from_decimal, _exp_terms_from_mpmath
+from cfmath import CF, E, EulerGamma, Exp, Ln, Pi, convergent
+from cfmath.exponential import ExpCF, ExpCFMode, ExpMP, _exp_terms_from_decimal, _exp_terms_from_mpmath
+from cfmath.quadratic import Sqrt
 
 
 class TestExp:
@@ -50,6 +51,60 @@ class TestExp:
         result = Exp(Fraction(3, 2) * Ln(2))
         val = float(convergent(result.take(20), 19))
         assert abs(val - 2**1.5) < 1e-8
+
+
+class _TestExpCF:
+    N_TERMS = 80
+    pi = Pi()
+    pi.take(N_TERMS)
+
+    def _test_exp_cf_1_matches_e(self):
+        """ExpCF(1) should give the same value as E()."""
+        cf0 = E()
+        cf1 = ExpCF(CF.from_int(1), self.mode)
+        assert cf0 == cf1
+
+    def _test_exp_cf_matches_mpmath(self):
+        """MetaCF agrees with mpmath term-for-term."""
+        for val in (1 / Sqrt(2), Sqrt(2), Pi(), EulerGamma() + Pi() + Sqrt(2)):
+            y0 = ExpMP(val).take(self.N_TERMS).terms
+            y1 = ExpCF(val, self.mode).take(self.N_TERMS).terms
+            assert y0 == y1
+
+    def _exp_take(self, inp, n_terms):
+        """Take n_terms of ExpCF(inp)."""
+        return ExpCF(inp, self.mode).take(n_terms)
+
+    def _test_exp_cf_exp_pi(self, benchmark):
+        """Benchmark ExpCF(Pi())."""
+        n_terms = self.N_TERMS // 4
+        cf_terms = benchmark(self._exp_take, self.pi, n_terms)
+        mp_terms = ExpMP(self.pi).take(n_terms)
+        assert cf_terms == mp_terms
+
+
+class TestExpCFSimple(_TestExpCF):
+    mode = ExpCFMode.SIMPLE
+    test_exp_simple_1_matches_e = _TestExpCF._test_exp_cf_1_matches_e
+    test_exp_simple_matches_mpmath = _TestExpCF._test_exp_cf_matches_mpmath
+    test_exp_simple_exp_pi = _TestExpCF._test_exp_cf_exp_pi
+
+
+class TestExpCFPoly(_TestExpCF):
+    mode = ExpCFMode.POLY
+    test_exp_poly_1_matches_e = _TestExpCF._test_exp_cf_1_matches_e
+    test_exp_poly_matches_mpmath = _TestExpCF._test_exp_cf_matches_mpmath
+    test_exp_poly_exp_pi = _TestExpCF._test_exp_cf_exp_pi
+
+
+class TestExpMpmath(_TestExpCF):
+    def _exp_take(self, inp, n_terms):
+        return ExpMP(inp).take(n_terms)
+
+    def test_exp_mpmath_exp_pi(self, benchmark):
+        """Benchmark ExpMP(Pi()) as a control."""
+        n_terms = self.N_TERMS // 4
+        benchmark(self._exp_take, self.pi, n_terms)
 
 
 class TestDecimalBackend:

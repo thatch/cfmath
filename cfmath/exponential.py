@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from enum import Enum
 from fractions import Fraction
 from typing import Callable, Iterator
 
@@ -64,10 +65,10 @@ def _halfexpm1_metaCF_simple_terms() -> Iterator[Callable[[CF], CF]]:
     Efficient convergence guaranteed for z in [1, ∞].
     """
     k = 2
-    yield lambda x: k * x - 1
+    yield lambda x, k=k: k * x - 1
     while True:
         k += 4
-        yield lambda x: k * x
+        yield lambda x, k=k: k * x
 
 
 def _halfexpm1_metaCF_terms() -> Iterator[list[int]]:
@@ -82,7 +83,13 @@ def _halfexpm1_metaCF_terms() -> Iterator[list[int]]:
         yield [0, k]
 
 
-def ExpCF(x: CF, mode: str | None = None) -> CF:
+class ExpCFMode(Enum):
+    POLY = 1
+    SIMPLE = 2
+    DEFAULT = POLY
+
+
+def ExpCF(x: CF, mode: ExpCFMode = ExpCFMode.DEFAULT) -> CF:
     """e raised to the power x, as a continued fraction.
 
     Only continued fraction computation is used in the backend.
@@ -90,10 +97,6 @@ def ExpCF(x: CF, mode: str | None = None) -> CF:
     TODO: Test heavily, then merge in features from ExpMP.
     """
     # TODO: Test heavily, then merge in features from ExpMP.
-
-    modes = (None, "simple")
-    if mode not in modes:
-        raise ValueError("mode must be one of: {modes}")
 
     x_coerced = CF._coerce(x)
     if x_coerced is None:
@@ -121,35 +124,11 @@ def ExpCF(x: CF, mode: str | None = None) -> CF:
     # and then plug that into the metaCF within:
     #   Exp(1/z) = 1 + 2/[2z-1; 6z, 10z, 14z, ...]
     # and it will converge efficiently with z and each term in (1, ∞)
-    if mode is None:
+    if mode == ExpCFMode.POLY:
         return 1 + 2 / cf_metaCF(1 / x, _halfexpm1_metaCF_terms())
-    if mode == "simple":
+    if mode == ExpCFMode.SIMPLE:
         return 1 + 2 / cf_metaCF_simple(1 / x, _halfexpm1_metaCF_simple_terms())
     assert False
-
-
-# TODO: Move to tests
-def test_ExpCF(mode: None = None) -> None:
-    from .constants import EulerGamma, Pi
-    from .quadratic import Sqrt
-
-    assert E() == ExpCF(CF.from_int(1))
-    for val in (1 / Sqrt(2), Sqrt(2), Pi(), EulerGamma() + Pi() + Sqrt(2)):
-        y0 = ExpMP(val).take(80).terms
-        y1 = ExpCF(val, mode).take(80).terms
-        assert y0 == y1
-    from timeit import timeit
-
-    n = 1000
-    setup = "from cfmath import Pi, exponential; pi = Pi(); pi.take(20)"
-    if mode is None:
-        t0 = timeit("exponential.ExpMP(pi).take(20)", setup, number=n)
-        t1 = timeit("exponential.ExpCF(pi).take(20)", setup, number=n)
-        print(f"{(t1 - t0) / t0:6.0%} ({t1:.0f}s) time taken for ExpCF(Pi) for {n=} runs")
-    if mode == "simple":
-        t0 = timeit("exponential.ExpMP(pi).take(20)", setup, number=n)
-        t1 = timeit('exponential.ExpCF(pi, "simple").take(20)', setup, number=n)
-        print(f"{(t1 - t0) / t0:6.0%} ({t1:.0f}s) time taken for ExpCF(Pi) for {n=} runs")
 
 
 def ExpMP(x: int | Fraction | CF) -> CF:
