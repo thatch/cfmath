@@ -46,6 +46,7 @@ Bill Gosper, HAKMEM, MIT AI Memo 239, 1972, items 101-101B.
 
 from __future__ import annotations
 
+import os
 from fractions import Fraction
 from typing import TYPE_CHECKING, Callable, Iterator
 
@@ -56,6 +57,12 @@ if TYPE_CHECKING:
 
 
 _MAX_STALL = 1000  # max input terms consumed per output term before giving up
+
+# Max extra terms of x read while trying to pin one output term before metaCF
+# gives up.  An exact-boundary value (e.g. Exp(Ln(2)) = 2) refines forever, so
+# this turns the hang into an error.  Working irrational cases need ~5; 100
+# leaves wide margin.  Override with CFRAC_METACF_STALL_LIMIT.
+_METACF_STALL_LIMIT = int(os.environ.get("CFRAC_METACF_STALL_LIMIT", "100"))
 
 
 # ---------------------------------------------------------------------------
@@ -454,9 +461,20 @@ def _metaCF_simple_terms(x: CF, F_iter: Iterator[Callable[[CF], CF]]) -> Iterato
         # Ingest: substitute F = t + 1/F'
         a, b, c, d = b + a * t, a, d + c * t, c
 
+        # As in _metaCF_terms, an exact-boundary value (e.g. Exp(Ln(2)) = 2)
+        # leaves the two corners floored one apart no matter how many F terms
+        # we ingest — no interval check can confirm it.  Fail loudly instead of
+        # silently truncating (which would return a wrong CF for values like
+        # Exp(Ln(7/4)) = 8/3 = [2; 1, 2]).
         stall += 1
-        if stall >= _MAX_STALL // 50:
-            return
+        if stall >= _METACF_STALL_LIMIT:
+            raise ArithmeticError(
+                f"metaCF stalled: ingested {stall} terms of F without pinning an "
+                f"output term (corners floor to {n0} and {n1}).  The value is "
+                f"likely exactly the integer boundary {max(n0, n1)}, which an "
+                f"interval corner check cannot confirm.  Raise "
+                f"CFRAC_METACF_STALL_LIMIT to allow more iterations."
+            )
 
 
 def cf_metaCF_simple(x: CF, F_iter: Iterator[Callable[[CF], CF]]) -> CF:
@@ -640,6 +658,7 @@ def _metaCF_terms(x: CF, F_iter: Iterator[list[int]]) -> Iterator[int]:
 
     x_i = 1
     stall = 0
+    refine_stall = 0
     F_done = False
     x_CHANGED = True
 
@@ -685,6 +704,7 @@ def _metaCF_terms(x: CF, F_iter: Iterator[list[int]]) -> Iterator[int]:
             nn = n0
             yield nn
             stall = 0
+            refine_stall = 0
             # Subtract n, take reciprocal: (a,b,c,d) → (c, d, a-nc, b-nd)
             a, b, c, d = c, d, padd(a, pmul([-nn], c)), padd(b, pmul([-nn], d))
             a0, b0, c0, d0 = c0, d0, a0 - nn * c0, b0 - nn * d0
@@ -698,8 +718,25 @@ def _metaCF_terms(x: CF, F_iter: Iterator[list[int]]) -> Iterator[int]:
 
         if n0 is not None and n1 is not None:
             # coefficient polynomials were precise enough to determine n0, n1
-            # at each q0, q1 with q0 <= x <= q1,
-            # but x was too vague for n0 to equal n1; iterate on x
+            # at each q0, q1 with q0 <= x <= q1, but x was too vague for n0 to
+            # equal n1; read another term of x to tighten the [q0, q1] bracket.
+            #
+            # This makes progress only if the true value lies strictly inside
+            # the bracket.  When the value sits *exactly* on the integer
+            # boundary between n0 and n1 (e.g. Exp(Ln(2)) = 2, an exact integer
+            # produced from an infinite input), every bracket around x straddles
+            # it, so n0 and n1 never agree and this branch refines x forever.
+            # No interval-based corner check can resolve an exact-boundary value;
+            # cap the refinements and fail loudly rather than hang.
+            refine_stall += 1
+            if refine_stall >= _METACF_STALL_LIMIT:
+                raise ArithmeticError(
+                    f"metaCF stalled: read {refine_stall} extra terms of x without "
+                    f"pinning an output term (corners floor to {n0} and {n1}). "
+                    f"The value is likely exactly the integer boundary {n1}, which "
+                    f"an interval corner check cannot confirm.  Raise "
+                    f"CFRAC_METACF_STALL_LIMIT to allow more refinement."
+                )
             x_i += 1
             x_CHANGED = True
             continue

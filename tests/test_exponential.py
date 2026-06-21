@@ -52,6 +52,43 @@ class TestExp:
         assert abs(val - 2**1.5) < 1e-8
 
 
+class TestMetaCFStall:
+    """ExpCF via the meta-CF backend cannot represent an exact-integer result.
+
+    Exp(Ln(2)) = 2 exactly.  The meta-CF value F = 2/(Exp(x) - 1) then lands on
+    an integer boundary, and an interval corner check can never confirm a value
+    that sits exactly on the boundary (the bracket always straddles it).  Both
+    backends used to spin instead of stopping; now they raise ArithmeticError
+    once refinement passes _METACF_STALL_LIMIT without pinning a term.
+    """
+
+    def test_expcf_default_mode_raises(self, monkeypatch):
+        import cfmath.gosper as gosper
+        from cfmath.exponential import ExpCF
+
+        # Small limit keeps the test fast; the spin would otherwise be unbounded.
+        monkeypatch.setattr(gosper, "_METACF_STALL_LIMIT", 8)
+        with pytest.raises(ArithmeticError, match="metaCF stalled"):
+            ExpCF(Ln(2)).take(5)
+
+    def test_expcf_simple_mode_raises(self, monkeypatch):
+        import cfmath.gosper as gosper
+        from cfmath.exponential import ExpCF
+
+        monkeypatch.setattr(gosper, "_METACF_STALL_LIMIT", 8)
+        with pytest.raises(ArithmeticError, match="metaCF stalled"):
+            ExpCF(Ln(2), mode="simple").take(5)
+
+    def test_cf_metacf_repro_raises(self, monkeypatch):
+        """The minimal repro: cf_metaCF(1/Ln(2), ...) directly."""
+        import cfmath.gosper as gosper
+        from cfmath.exponential import _halfexpm1_metaCF_terms
+
+        monkeypatch.setattr(gosper, "_METACF_STALL_LIMIT", 8)
+        with pytest.raises(ArithmeticError, match="metaCF stalled"):
+            gosper.cf_metaCF(1 / Ln(2), _halfexpm1_metaCF_terms()).take(5)
+
+
 class TestDecimalBackend:
     def test_exp_decimal_matches_mpmath(self):
         """Decimal Taylor series for exp agrees with mpmath term-for-term."""
