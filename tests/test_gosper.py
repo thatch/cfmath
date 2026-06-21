@@ -305,19 +305,6 @@ class TestHomographic:
         # (0*Pi + 7)/(0*Pi + 2) = 7/2 = [3; 2]
         assert cf_homographic(Pi(), 0, 7, 0, 2).take(4).terms == [3, 2]
 
-    def test_homo_boundary_gimme_logic(self):
-        """Unit-test the one-input gimme decision (the full-loop trigger needs a
-        non-degenerate near-rational, which natural inputs don't reach)."""
-        from cfmath.gosper import _GIMME_MIN_TERM_DIGITS, _homo_boundary
-
-        eps = 10 ** (_GIMME_MIN_TERM_DIGITS + 10)
-        # corners 1 - 1/eps and 1 + 1/eps straddle 1 within the threshold
-        assert _homo_boundary(eps - 1, 2, eps, 0) == 1
-        # a wide straddle (corners 1.4 and 1.6) is not pinned
-        assert _homo_boundary(7, 1, 5, 0) is None  # 7/5=1.4, 8/5=1.6
-        # a pole (denominator 0) cannot be pinned
-        assert _homo_boundary(1, 0, 0, 1) is None
-
 
 class TestLargeCornerOverflow:
     """A bihomographic corner can exceed the float range when a coefficient is

@@ -177,28 +177,6 @@ def _bi_output(
 # ---------------------------------------------------------------------------
 
 
-def _homo_boundary(a: int, b: int, c: int, d: int) -> int | None:
-    """Gimme for the one-input transform, the same rule as _bi_boundary.
-
-    The two corners (x' = ∞ → a/c, x' = 1 → (a+b)/(c+d)) bound the output.  If
-    both are finite and same-signed (no pole in [1, ∞)) and span less than
-    10^-_GIMME_MIN_TERM_DIGITS while straddling an integer, return that integer.
-    Corners here are exact integer ratios, so the bracket narrows without a float
-    floor — no exact-ingest switch is needed (unlike the two-input path).
-    """
-    if c == 0 or c + d == 0:
-        return None  # a corner at infinity
-    if (c > 0) != (c + d > 0):
-        return None  # pole in [1, ∞)
-    lo, hi = sorted((Fraction(a, c), Fraction(a + b, c + d)))
-    if hi - lo >= Fraction(1, 10**_GIMME_MIN_TERM_DIGITS):
-        return None
-    k = hi.numerator // hi.denominator  # floor(hi): the straddled integer
-    if lo >= k:
-        return None  # both corners share floor k — a normal emit, not a straddle
-    return k
-
-
 def _homographic_terms(
     x_iter: Iterator[int],
     a: int,
@@ -245,19 +223,17 @@ def _homographic_terms(
         # Ingest: substitute x = t + 1/x'
         a, b, c, d = a * t + b, a, c * t + d, c
         stall += 1
-        # Integer-boundary stall: the value is an exact (or extremely near)
-        # rational, e.g. a degenerate map.  Accept it on the same digit rule as
-        # the two-input path rather than silently truncating.
-        if stall >= _BI_GIMME_WARMUP:
-            boundary = _homo_boundary(a, b, c, d)
-            if boundary is not None:
-                yield boundary
-                return
+        # A one-input transform of a canonical CF always emits or terminates:
+        # an exact-rational output is the degenerate map handled above, and a
+        # near-rational output needs a near-rational *input*, whose large partial
+        # quotient pins the floor in a single read before the bracket can shrink
+        # to a boundary gimme.  (The two-input path differs: correlated inputs,
+        # e.g. x - x, narrow gradually with no large term, so it has a gimme.)
+        # A long stall therefore means a malformed/non-canonical input; fail loud.
         if stall >= _GIMME_REFINE_CAP:
             raise ArithmeticError(
                 f"homographic stalled: read {stall} terms without pinning an "
-                f"output term or a near-rational boundary within "
-                f"10^-{_GIMME_MIN_TERM_DIGITS} (raise CFRAC_GIMME_MIN_TERM_DIGITS)"
+                f"output term (likely a malformed input)"
             )
 
 
