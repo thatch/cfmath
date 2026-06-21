@@ -8,6 +8,7 @@ from typing import Callable, Iterator
 from ._backend import _HAS_MPMATH, _coerce_trig_arg, _lazy_cf
 from .constants import E
 from .core import CF
+from .gosper import _GIMME_MIN_TERM_DIGITS
 
 
 def _exp_terms_from_decimal(x_num: int, x_den: int, n_terms: int) -> list[int]:
@@ -82,10 +83,21 @@ def _halfexpm1_metaCF_terms() -> Iterator[list[int]]:
         yield [0, k]
 
 
-def ExpCF(x: CF, mode: str | None = None) -> CF:
+def ExpCF(
+    x: CF,
+    mode: str | None = None,
+    gimme_min_term_digits: int | None = _GIMME_MIN_TERM_DIGITS,
+) -> CF:
     """e raised to the power x, as a continued fraction.
 
     Only continued fraction computation is used in the backend.
+
+    When e**x is exactly rational (e.g. x = Ln(2) gives 2) the metaCF would
+    otherwise refine forever trying to confirm the integer boundary.
+    ``gimme_min_term_digits`` lets it accept the near-rational once the evidence
+    (digits of the suppressed partial quotient) is strong enough; see
+    ``cf_metaCF``.  Set to None to raise on stall instead.  Only the default
+    mode supports gimme; mode="simple" (the slow reference path) always raises.
 
     TODO: Test heavily, then merge in features from ExpMP.
     """
@@ -111,7 +123,7 @@ def ExpCF(x: CF, mode: str | None = None) -> CF:
         #        = Exp(x0 + [0; ...])
         #        = Exp(x0) * Exp([0; ...])
         #        = e**x0   * Exp([0; ...])
-        return E() ** x0 * ExpCF(x - x0, mode=mode)
+        return E() ** x0 * ExpCF(x - x0, mode=mode, gimme_min_term_digits=gimme_min_term_digits)
 
     from .gosper import cf_metaCF, cf_metaCF_simple
 
@@ -122,7 +134,7 @@ def ExpCF(x: CF, mode: str | None = None) -> CF:
     #   Exp(1/z) = 1 + 2/[2z-1; 6z, 10z, 14z, ...]
     # and it will converge efficiently with z and each term in (1, ∞)
     if mode is None:
-        return 1 + 2 / cf_metaCF(1 / x, _halfexpm1_metaCF_terms())
+        return 1 + 2 / cf_metaCF(1 / x, _halfexpm1_metaCF_terms(), gimme_min_term_digits=gimme_min_term_digits)
     if mode == "simple":
         return 1 + 2 / cf_metaCF_simple(1 / x, _halfexpm1_metaCF_simple_terms())
     assert False

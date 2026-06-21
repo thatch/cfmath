@@ -59,10 +59,30 @@ if TYPE_CHECKING:
 _MAX_STALL = 1000  # max input terms consumed per output term before giving up
 
 # Max extra terms of x read while trying to pin one output term before metaCF
-# gives up.  An exact-boundary value (e.g. Exp(Ln(2)) = 2) refines forever, so
-# this turns the hang into an error.  Working irrational cases need ~5; 100
-# leaves wide margin.  Override with CFRAC_METACF_STALL_LIMIT.
+# gives up.  Used only when gimme mode is OFF (gimme_min_term_digits=None): an
+# exact-boundary value (e.g. Exp(Ln(2)) = 2) refines forever, so this turns the
+# hang into an error.  Working irrational cases need ~5; 100 leaves wide margin.
+# Override with CFRAC_METACF_STALL_LIMIT.
 _METACF_STALL_LIMIT = int(os.environ.get("CFRAC_METACF_STALL_LIMIT", "100"))
+
+# "Gimme" mode: when a stall persists, the value sits within 10^-N of an integer
+# boundary, where N (the digit count of the partial quotient we would otherwise
+# emit) grows as we refine.  Once N reaches this threshold, gimme declares the
+# value exactly that boundary — the best rational the large suppressed term
+# reveals — and stops, with error < 10^-N.  See the discussion in
+# _metaCF_terms.  The threshold must exceed the largest partial quotient (in
+# digits) of any value you consider legitimate rather than a coincidental
+# near-rational.  Calibration points: Ramanujan's constant e^(pi*sqrt(163)) is
+# an integer to ~12 digits; fib(360)/fib(216) is a near-integer (~Lucas(144))
+# to ~30 digits, with a 31-digit partial quotient.  The default clears both.
+# Set to None to disable gimme (raise on stall instead).  Override with
+# CFRAC_GIMME_MIN_TERM_DIGITS.
+_GIMME_MIN_TERM_DIGITS = int(os.environ.get("CFRAC_GIMME_MIN_TERM_DIGITS", "50"))
+
+# Safety net: even with gimme on, cap total refinements so a pathological input
+# (bracket failing to shrink) cannot loop forever.  Refinement reaches N digits
+# in ~2.4*N terms in the worst (all-ones) case, so this leaves wide margin.
+_GIMME_REFINE_CAP = 50 * _GIMME_MIN_TERM_DIGITS + 1000
 
 
 # ---------------------------------------------------------------------------
@@ -491,7 +511,11 @@ def cf_metaCF_simple(x: CF, F_iter: Iterator[Callable[[CF], CF]]) -> CF:
     return _CF([], _source=_metaCF_simple_terms(x, F_iter))
 
 
-def _metaCF_terms(x: CF, F_iter: Iterator[list[int]]) -> Iterator[int]:
+def _metaCF_terms(
+    x: CF,
+    F_iter: Iterator[list[int]],
+    gimme_min_term_digits: int | None = _GIMME_MIN_TERM_DIGITS,
+) -> Iterator[int]:
     """Yield CF terms of (aF+b)/(cF+d) given the CF terms of F, one at a time.
 
     All terms of F and coefficients of the 'homographic' (in F) state are
@@ -726,16 +750,38 @@ def _metaCF_terms(x: CF, F_iter: Iterator[list[int]]) -> Iterator[int]:
             # boundary between n0 and n1 (e.g. Exp(Ln(2)) = 2, an exact integer
             # produced from an infinite input), every bracket around x straddles
             # it, so n0 and n1 never agree and this branch refines x forever.
-            # No interval-based corner check can resolve an exact-boundary value;
-            # cap the refinements and fail loudly rather than hang.
+            # No interval-based corner check can resolve an exact-boundary value.
+            #
+            # The width of the value bracket bounds how close the true value is
+            # to the straddled integer K = max(n0, n1): the four corners are the
+            # homographic evaluated at each x-endpoint (q0, q1) and each F'-tail
+            # endpoint (1, inf).  If that width is below 10^-gimme_min_term_digits
+            # the partial quotient we would otherwise emit has at least that many
+            # digits — strong evidence the value is the near-rational K.  In
+            # gimme mode, declare it exactly K and stop (error < 10^-digits);
+            # otherwise refine until the stall cap, then raise.
+            if gimme_min_term_digits is not None:
+                corners = [
+                    Fraction(a0, c0),
+                    Fraction(a0 + b0, c0 + d0),
+                    Fraction(a1, c1),
+                    Fraction(a1 + b1, c1 + d1),
+                ]
+                width = max(corners) - min(corners)
+                if width != 0 and width < Fraction(1, 10**gimme_min_term_digits):
+                    yield max(n0, n1)
+                    return
+
             refine_stall += 1
-            if refine_stall >= _METACF_STALL_LIMIT:
+            cap = _METACF_STALL_LIMIT if gimme_min_term_digits is None else _GIMME_REFINE_CAP
+            if refine_stall >= cap:
                 raise ArithmeticError(
                     f"metaCF stalled: read {refine_stall} extra terms of x without "
                     f"pinning an output term (corners floor to {n0} and {n1}). "
-                    f"The value is likely exactly the integer boundary {n1}, which "
-                    f"an interval corner check cannot confirm.  Raise "
-                    f"CFRAC_METACF_STALL_LIMIT to allow more refinement."
+                    f"The value is likely exactly the integer boundary {max(n0, n1)}, "
+                    f"which an interval corner check cannot confirm.  Enable gimme "
+                    f"mode (gimme_min_term_digits=) to accept the near-rational, or "
+                    f"raise CFRAC_METACF_STALL_LIMIT."
                 )
             x_i += 1
             x_CHANGED = True
@@ -784,7 +830,11 @@ def _metaCF_terms(x: CF, F_iter: Iterator[list[int]]) -> Iterator[int]:
             return
 
 
-def cf_metaCF(x: CF, F: Iterator[list[int]]) -> CF:
+def cf_metaCF(
+    x: CF,
+    F: Iterator[list[int]],
+    gimme_min_term_digits: int | None = _GIMME_MIN_TERM_DIGITS,
+) -> CF:
     """Return the CF for F(x), where F is a CF of polynomials of x.
 
     Each polynomial is represented as a list of int coefficients, where
@@ -797,10 +847,16 @@ def cf_metaCF(x: CF, F: Iterator[list[int]]) -> CF:
     In order to ensure efficient convergence, F should have
     (all but finitely many) terms guaranteed to be in [1, ∞]
     for the domain of x-values F operates on.
+
+    ``gimme_min_term_digits`` controls gimme mode: when the result hugs an
+    integer boundary so closely that the next partial quotient would have at
+    least this many digits, accept it as that exact rational rather than
+    refining forever (see ``_metaCF_terms``).  Set to None to raise on stall
+    instead.
     """
     from .core import CF as _CF
 
-    return _CF([], _source=_metaCF_terms(x, F))
+    return _CF([], _source=_metaCF_terms(x, F, gimme_min_term_digits))
 
 
 # ---------------------------------------------------------------------------
