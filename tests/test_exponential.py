@@ -82,22 +82,31 @@ class TestMetaCFStall:
         import cfmath.gosper as gosper
         from cfmath.exponential import ExpCF, _halfexpm1_metaCF_terms
 
-        monkeypatch.setattr(gosper, "_METACF_STALL_LIMIT", 8)
+        # gimme=None uses the main-path stall cap; small value keeps this fast.
+        monkeypatch.setattr(gosper, "_METACF_NONE_STALL_LIMIT", 8)
         with pytest.raises(ArithmeticError, match="metaCF stalled"):
             ExpCF(Ln(2), gimme_min_term_digits=None).take(4)
         with pytest.raises(ArithmeticError, match="metaCF stalled"):
             gosper.cf_metaCF(1 / Ln(2), _halfexpm1_metaCF_terms(), gimme_min_term_digits=None).take(4)
 
-    def test_simple_mode_still_raises(self):
-        """The slow reference path does not support gimme; it raises."""
+    def test_simple_mode_still_raises(self, monkeypatch):
+        """The slow reference path does not support gimme; it raises.
+
+        Small limit keeps this fast — the simple path does full CF arithmetic
+        per iteration, so 200 deep would be slow (and grow coefficients past the
+        float range).
+        """
+        import cfmath.gosper as gosper
         from cfmath.exponential import ExpCF
 
+        monkeypatch.setattr(gosper, "_METACF_STALL_LIMIT", 8)
         with pytest.raises(ArithmeticError, match="metaCF stalled"):
             ExpCF(Ln(2), mode="simple").take(4)
 
     def test_gimme_does_not_misfire_on_irrational(self):
         """A genuine irrational result is computed exactly, gimme never firing."""
         import mpmath
+
         from cfmath.exponential import ExpCF
 
         mpmath.mp.dps = 80

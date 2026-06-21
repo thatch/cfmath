@@ -287,3 +287,17 @@ class TestHomographic:
         x = CF.from_fraction(5, 11)
         y = cf_homographic(x, 3, 0, 0, 1)
         assert _eval(y) == Fraction(15, 11)
+
+
+class TestLargeCornerOverflow:
+    """A bihomographic corner can exceed the float range when a coefficient is
+    huge (e.g. a CF with a large integer part).  The ingest-ordering heuristic
+    converts corners to float, which used to raise OverflowError; it must fall
+    back gracefully instead."""
+
+    def test_huge_integer_part_does_not_overflow(self):
+        big = CF([10**400])  # ~1e400, far past the float range
+        # Completes (no OverflowError) and floors correctly: 10**400 + sqrt(2).
+        assert (big + Sqrt(2)).take(2).terms[0] == 10**400 + 1
+        # exact-rational result still resolves via the boundary handler
+        assert ((big + 1) - big).take(3).terms == [1]

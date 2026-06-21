@@ -58,12 +58,20 @@ if TYPE_CHECKING:
 
 _MAX_STALL = 1000  # max input terms consumed per output term before giving up
 
-# Max extra terms of x read while trying to pin one output term before metaCF
-# gives up.  Used only when gimme mode is OFF (gimme_min_term_digits=None): an
-# exact-boundary value (e.g. Exp(Ln(2)) = 2) refines forever, so this turns the
-# hang into an error.  Working irrational cases need ~5; 100 leaves wide margin.
-# Override with CFRAC_METACF_STALL_LIMIT.
+# Max non-emitting iterations before _metaCF_simple_terms gives up and raises.
+# The simple reference path cannot detect an exact-rational result; given more
+# budget it emits a spurious near-rational term (like the mpmath backend) rather
+# than raising, so this stays small enough to raise first (garbage appears past
+# ~125).  Override with CFRAC_METACF_STALL_LIMIT.
 _METACF_STALL_LIMIT = int(os.environ.get("CFRAC_METACF_STALL_LIMIT", "100"))
+
+# Max extra terms of x read in the main path when gimme is OFF
+# (gimme_min_term_digits=None) before raising on a stall.  Unlike the simple
+# path, the main path never emits a spurious term, so this can be generous: it
+# bounds how large a legitimate partial quotient an irrational result may have
+# before it is wrongly rejected (~one digit per ~2.4 terms), so 200 admits
+# ~80-digit terms.  Override with CFRAC_METACF_NONE_STALL_LIMIT.
+_METACF_NONE_STALL_LIMIT = int(os.environ.get("CFRAC_METACF_NONE_STALL_LIMIT", "200"))
 
 # "Gimme" mode: when a stall persists, the value sits within 10^-N of an integer
 # boundary, where N (the digit count of the partial quotient we would otherwise
@@ -359,10 +367,11 @@ def _bihomographic_terms(
 
 
 def _corner_val(num: int, den: int) -> float:
-    """Safe float value of num/den for spread calculations.
+    """Float value of num/den for spread calculations.
 
     Returns `float("inf")` for all infinite results, never `float("-inf")`
-    (There is only one inifinty in projective space P^1.)
+    (there is only one infinity in projective space P^1).  Raises OverflowError
+    when num/den exceeds the float range; callers fall back to exact arithmetic.
     """
     if den == 0:
         return float("inf")
@@ -384,23 +393,22 @@ def _should_ingest_x(
     Compares how much the four corner values spread apart when x varies (1→∞)
     versus when y varies (1→∞).  Whichever input causes more spread in the output
     is the one that most needs to be pinned down by reading its next term.
+
+    The decision runs on floats (this is the hot per-iteration path).  A corner
+    past the float range (~1e308, only with hundreds of digits in a coefficient)
+    overflows; that call falls back to exact rational arithmetic, which is slow
+    but reached only by pathological inputs.
     """
     # Corners: (∞,∞), (∞,1), (1,∞), (1,1)
-    c00 = _corner_val(a, e)  # (∞, ∞)
-    c01 = _corner_val(a + b, e + f)  # (∞, 1)
-    c10 = _corner_val(a + c, e + g)  # (1, ∞)
-    c11 = _corner_val(a + b + c + d, e + f + g + h)  # (1, 1)
+    try:
+        c00 = _corner_val(a, e)  # (∞, ∞)
+        c01 = _corner_val(a + b, e + f)  # (∞, 1)
+        c10 = _corner_val(a + c, e + g)  # (1, ∞)
+        c11 = _corner_val(a + b + c + d, e + f + g + h)  # (1, 1)
+    except OverflowError:
+        return _should_ingest_x_exact(a, b, c, d, e, f, g, h)
 
-    def _spread(v1: float, v2: float, v3: float, v4: float) -> float:
-        finite = [v for v in (v1, v2, v3, v4) if abs(v) != float("inf")]
-        if len(finite) < 2:
-            return float("inf")
-        return max(finite) - min(finite)
-
-    # x-spread: corners varying x' (1→∞) with y' fixed
-    _spread(c00, c10, c01, c11)  # all four corners
-    # y-spread: corners varying y' (1→∞) with x' fixed
-    # As a proxy, compare the x-direction range vs y-direction range:
+    # Compare the x-direction range vs the y-direction range.
     sx_inf = abs(c00 - c10)  # x: ∞ vs 1, with y=∞
     sx_one = abs(c01 - c11)  # x: ∞ vs 1, with y=1
     sy_inf = abs(c00 - c01)  # y: ∞ vs 1, with x=∞
@@ -414,6 +422,40 @@ def _should_ingest_x(
     if spread_x == float("inf"):
         return True
     if spread_y == float("inf"):
+        return False
+    return spread_x >= spread_y
+
+
+def _should_ingest_x_exact(a: int, b: int, c: int, d: int, e: int, f: int, g: int, h: int) -> bool:
+    """Exact-rational fallback for _should_ingest_x when a corner overflows float.
+
+    ``None`` is projective infinity (den == 0).  Two infinities are the *same*
+    point, so a direction with both endpoints at infinity has zero spread; a
+    direction mixing finite and infinite has infinite spread.
+    """
+
+    def corner(num: int, den: int) -> Fraction | None:
+        return None if den == 0 else Fraction(num, den)
+
+    c00, c01 = corner(a, e), corner(a + b, e + f)
+    c10, c11 = corner(a + c, e + g), corner(a + b + c + d, e + f + g + h)
+
+    def dist(p: Fraction | None, q: Fraction | None) -> Fraction | None:
+        if p is None and q is None:
+            return Fraction(0)
+        if p is None or q is None:
+            return None  # infinite spread
+        return abs(p - q)
+
+    def spread(d1: Fraction | None, d2: Fraction | None) -> Fraction | None:
+        return None if (d1 is None or d2 is None) else max(d1, d2)
+
+    spread_x = spread(dist(c00, c10), dist(c01, c11))
+    spread_y = spread(dist(c00, c01), dist(c10, c11))
+
+    if spread_x is None:
+        return True
+    if spread_y is None:
         return False
     return spread_x >= spread_y
 
@@ -773,7 +815,7 @@ def _metaCF_terms(
                     return
 
             refine_stall += 1
-            cap = _METACF_STALL_LIMIT if gimme_min_term_digits is None else _GIMME_REFINE_CAP
+            cap = _METACF_NONE_STALL_LIMIT if gimme_min_term_digits is None else _GIMME_REFINE_CAP
             if refine_stall >= cap:
                 raise ArithmeticError(
                     f"metaCF stalled: read {refine_stall} extra terms of x without "
