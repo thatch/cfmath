@@ -7,6 +7,8 @@ hand-coded path in gosper.py.
 
 from fractions import Fraction
 
+import pytest
+
 from cfmath import CF, Phi, Sqrt, convergent, convergents
 from cfmath.gosper_generalized import (
     cf_add,
@@ -327,3 +329,34 @@ class TestMinMax:
         a = CF.from_fraction(1, 3)
         b = CF.from_fraction(1, 2)
         assert cf_max(a, b).to_fraction() == Fraction(1, 2)
+
+
+class TestNaryGimmeAndOverflow:
+    """The n-ary path shares gosper.py's digit-based gimme, exact-on-stall
+    narrowing, and overflow-safe corner ranking (same config)."""
+
+    def test_exact_rationals_resolve(self):
+        from cfmath import Pi
+
+        assert cf_sub(Pi(), Pi()).take(3).terms == [0]
+        assert cf_div(Pi(), Pi()).take(3).terms == [1]
+        assert cf_mul(Sqrt(2), Sqrt(2)).take(3).terms == [2]
+        # genuine irrational unaffected: 2*pi = [6; 3, 1, 1, 7, 2, ...]
+        assert cf_add(Pi(), Pi()).take(6).terms == [6, 3, 1, 1, 7, 2]
+
+    def test_huge_coefficient_does_not_overflow(self):
+        # A corner past the float range used to raise OverflowError in the
+        # ingest-ranking heuristic; it must rank gracefully instead.
+        big = CF([10**400])
+        assert cf_add(big, Sqrt(2)).take(2).terms[0] == 10**400 + 1
+
+    def test_shared_config_governs(self, monkeypatch):
+        import cfmath.gosper as gosper
+        from cfmath import Pi
+
+        assert cf_div(Pi(), Pi()).take(3).terms == [1]
+        # The generalized module reads gosper's constants at runtime.
+        monkeypatch.setattr(gosper, "_GIMME_MIN_TERM_DIGITS", 100000)
+        monkeypatch.setattr(gosper, "_GIMME_REFINE_CAP", 30)
+        with pytest.raises(ArithmeticError, match="n-ary Gosper stalled"):
+            cf_div(Pi(), Pi()).take(3)
