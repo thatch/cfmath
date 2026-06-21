@@ -56,8 +56,6 @@ if TYPE_CHECKING:
     from .core import CF
 
 
-_MAX_STALL = 1000  # max input terms consumed per output term before giving up
-
 # Max non-emitting iterations before _metaCF_simple_terms gives up and raises.
 # The simple reference path cannot detect an exact-rational result; given more
 # budget it emits a spurious near-rational term (like the mpmath backend) rather
@@ -179,6 +177,28 @@ def _bi_output(
 # ---------------------------------------------------------------------------
 
 
+def _homo_boundary(a: int, b: int, c: int, d: int) -> int | None:
+    """Gimme for the one-input transform, the same rule as _bi_boundary.
+
+    The two corners (x' = ∞ → a/c, x' = 1 → (a+b)/(c+d)) bound the output.  If
+    both are finite and same-signed (no pole in [1, ∞)) and span less than
+    10^-_GIMME_MIN_TERM_DIGITS while straddling an integer, return that integer.
+    Corners here are exact integer ratios, so the bracket narrows without a float
+    floor — no exact-ingest switch is needed (unlike the two-input path).
+    """
+    if c == 0 or c + d == 0:
+        return None  # a corner at infinity
+    if (c > 0) != (c + d > 0):
+        return None  # pole in [1, ∞)
+    lo, hi = sorted((Fraction(a, c), Fraction(a + b, c + d)))
+    if hi - lo >= Fraction(1, 10**_GIMME_MIN_TERM_DIGITS):
+        return None
+    k = hi.numerator // hi.denominator  # floor(hi): the straddled integer
+    if lo >= k:
+        return None  # both corners share floor k — a normal emit, not a straddle
+    return k
+
+
 def _homographic_terms(
     x_iter: Iterator[int],
     a: int,
@@ -200,6 +220,12 @@ def _homographic_terms(
             a, b, c, d = c, d, a - n * c, b - n * d
             continue
 
+        if c == 0 and d == 0:
+            # Denominator is identically zero: the value is ∞, i.e. the CF has
+            # terminated (a finite/rational result fully emitted, e.g. a constant
+            # map like (0x+5)/(0x+1) = 5).  Nothing remains.
+            return
+
         if x_done:
             # x exhausted: tail x' → ∞, value is a/c
             if c == 0:
@@ -219,8 +245,20 @@ def _homographic_terms(
         # Ingest: substitute x = t + 1/x'
         a, b, c, d = a * t + b, a, c * t + d, c
         stall += 1
-        if stall >= _MAX_STALL:
-            return
+        # Integer-boundary stall: the value is an exact (or extremely near)
+        # rational, e.g. a degenerate map.  Accept it on the same digit rule as
+        # the two-input path rather than silently truncating.
+        if stall >= _BI_GIMME_WARMUP:
+            boundary = _homo_boundary(a, b, c, d)
+            if boundary is not None:
+                yield boundary
+                return
+        if stall >= _GIMME_REFINE_CAP:
+            raise ArithmeticError(
+                f"homographic stalled: read {stall} terms without pinning an "
+                f"output term or a near-rational boundary within "
+                f"10^-{_GIMME_MIN_TERM_DIGITS} (raise CFRAC_GIMME_MIN_TERM_DIGITS)"
+            )
 
 
 def cf_homographic(x: CF, a: int, b: int, c: int, d: int) -> CF:
@@ -258,7 +296,7 @@ def _bi_boundary(a: int, b: int, c: int, d: int, e: int, f: int, g: int, h: int)
     evidence the value is that near-rational.  Return the straddled integer (the
     best rational the large suppressed term reveals); otherwise None.
 
-    This replaces the old fixed "emit after _MAX_STALL terms" rule, so an
+    This replaces the old fixed "emit after N input terms" rule, so an
     exact-rational result like Ln(2)/Ln(2) = 1 resolves at the configured digit
     threshold rather than a hard-coded term count.  See _metaCF_terms.
     """
@@ -909,8 +947,15 @@ def _metaCF_terms(
             n1 = _homo_output_simple(a1, b1, c1, d1)
 
         stall += 1
-        if stall >= _MAX_STALL // 10:
-            return
+        if stall >= _METACF_STALL_LIMIT:
+            # F failed to determine an output term after this many ingestions
+            # (F not converging at the current x-bracket).  A near-rational
+            # *result* is caught earlier by the x-refinement gimme; reaching here
+            # is a genuine failure, so raise rather than silently truncate.
+            raise ArithmeticError(
+                f"metaCF stalled: ingested {stall} terms of F without determining "
+                f"an output term (F not converging at the current x-bracket)"
+            )
 
 
 def cf_metaCF(

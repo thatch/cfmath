@@ -50,7 +50,7 @@ def _floor_quotient(x: CF, y: CF) -> int:
     the convergents of *x* and *y*, and resolves floor(x/y) as soon as the
     interval for x/y stops straddling an integer.
 
-    This avoids building a lazy CF for x/y and bypasses the _MAX_STALL limit
+    This avoids building a lazy CF for x/y and bypasses the stall limit
     in the bihomographic algorithm.  The fundamental hard case — x/y exactly
     equal to an integer, with both inputs independently irrational — cannot
     terminate with any rational-approximation approach.

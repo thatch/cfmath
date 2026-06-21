@@ -290,6 +290,34 @@ class TestHomographic:
         y = cf_homographic(x, 3, 0, 0, 1)
         assert _eval(y) == Fraction(15, 11)
 
+    def test_constant_map_terminates_on_infinite_input(self):
+        """A degenerate (constant) map of an infinite input terminates.
+
+        After emitting the constant the denominator becomes identically zero
+        (value ∞ = CF ended).  Without that check the loop would ingest forever
+        and now raise; it must return the finite CF instead.
+        """
+        from cfmath import Pi
+        from cfmath.gosper import cf_homographic
+
+        # (0*Pi + 5)/(0*Pi + 1) = 5
+        assert cf_homographic(Pi(), 0, 5, 0, 1).take(3).terms == [5]
+        # (0*Pi + 7)/(0*Pi + 2) = 7/2 = [3; 2]
+        assert cf_homographic(Pi(), 0, 7, 0, 2).take(4).terms == [3, 2]
+
+    def test_homo_boundary_gimme_logic(self):
+        """Unit-test the one-input gimme decision (the full-loop trigger needs a
+        non-degenerate near-rational, which natural inputs don't reach)."""
+        from cfmath.gosper import _GIMME_MIN_TERM_DIGITS, _homo_boundary
+
+        eps = 10 ** (_GIMME_MIN_TERM_DIGITS + 10)
+        # corners 1 - 1/eps and 1 + 1/eps straddle 1 within the threshold
+        assert _homo_boundary(eps - 1, 2, eps, 0) == 1
+        # a wide straddle (corners 1.4 and 1.6) is not pinned
+        assert _homo_boundary(7, 1, 5, 0) is None  # 7/5=1.4, 8/5=1.6
+        # a pole (denominator 0) cannot be pinned
+        assert _homo_boundary(1, 0, 0, 1) is None
+
 
 class TestLargeCornerOverflow:
     """A bihomographic corner can exceed the float range when a coefficient is
@@ -341,3 +369,21 @@ class TestBihomographicGimme:
         monkeypatch.setattr(gosper, "_GIMME_REFINE_CAP", 30)
         with pytest.raises(ArithmeticError, match="bihomographic stalled"):
             (Pi() / Pi()).take(3)
+
+
+class TestMetaCFFIngestionStall:
+    """When the meta-CF F itself fails to determine an output term at the current
+    x-bracket (F not converging), the metaCF now raises rather than silently
+    truncating.  Distinct from the near-rational x-refinement gimme."""
+
+    def test_nonconverging_F_raises(self, monkeypatch):
+        import cfmath.gosper as gosper
+
+        monkeypatch.setattr(gosper, "_METACF_STALL_LIMIT", 8)
+
+        def bad_F():
+            while True:
+                yield [0, 1]  # term polynomial = x; the output never pins
+
+        with pytest.raises(ArithmeticError, match=r"ingested \d+ terms of F"):
+            gosper.cf_metaCF(Sqrt(2), bad_F()).take(2)
