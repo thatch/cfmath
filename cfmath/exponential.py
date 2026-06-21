@@ -179,6 +179,11 @@ def ExpMP(x: int | Fraction | CF) -> CF:
         Exp(Fraction(1, 2))          # sqrt(e) ≈ [1; 1, 1, 1, 5, ...]
         Exp(Fraction(3, 2) * Ln(2))  # 2^(3/2) ≈ [2; 1, 3, 1, 5, ...]
     """
+    if isinstance(x, CF) and x.is_finite():
+        # A finite CF is an exact rational; use the rational path below rather
+        # than the convergent-of-an-infinite-CF path, which needs many terms.
+        x = x.to_fraction()
+
     if isinstance(x, CF):
         x_cf = x
 

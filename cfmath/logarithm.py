@@ -109,6 +109,11 @@ def Ln(x: int | Fraction | CF) -> CF:
         Ln(3)        # ≈ [1; 10, 7, 9, 2, 2, 1, 3, 1, ...]
         Ln(Sqrt(2))  # ≈ [0; 2, 1, 2, 1, 4, 1, ...]  (= ln(2)/2)
     """
+    if isinstance(x, CF) and x.is_finite():
+        # A finite CF is an exact rational; use the (exact) rational path rather
+        # than the convergent-of-an-infinite-CF path, which needs many terms.
+        x = x.to_fraction()
+
     if isinstance(x, CF):
         # Quick non-positive check from the first term alone.
         # a0 < 0 → definitely negative; a0 == 0 with no further terms → zero.
