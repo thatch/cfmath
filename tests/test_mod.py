@@ -206,3 +206,30 @@ class TestDivmod:
         q, r = divmod(-17, frac(5))
         assert q == frac(-4)
         assert r == frac(3)
+
+
+class TestFloorQuotientGimme:
+    """floor(x/y) at an exact-integer boundary (e.g. Pi/Pi = 1) straddles
+    forever.  By default the shared gimme resolves it; gimme_min_term_digits=None
+    restores the old raise behaviour.  The bounds are exact Fractions, so there
+    is no float plateau — only the boundary itself is undecidable."""
+
+    def test_exact_boundary_resolves_by_default(self):
+        from cfmath.mod import _floor_quotient
+
+        assert _floor_quotient(Pi(), Pi()) == 1
+        assert (Pi() // Pi()).take(2).terms == [1]
+
+    def test_gimme_none_raises(self, monkeypatch):
+        import cfmath.mod as mod
+
+        # Small cap keeps it fast — without gimme it never resolves Pi/Pi.
+        monkeypatch.setattr(mod, "_MAX_FLOOR_ITERS", 50)
+        with pytest.raises(ArithmeticError, match="did not converge"):
+            mod._floor_quotient(Pi(), Pi(), gimme_min_term_digits=None)
+
+    def test_normal_cases_unaffected(self):
+        from cfmath.mod import _floor_quotient
+
+        assert _floor_quotient(Pi(), Sqrt(2)) == 2  # ~2.22
+        assert _floor_quotient(CF.from_int(10), CF.from_int(3)) == 3

@@ -6,10 +6,17 @@ import math
 from fractions import Fraction
 from typing import TYPE_CHECKING, Iterator
 
+# Read gosper's gimme constants at runtime so one config governs every path.
+from . import gosper as _gosper
+
 if TYPE_CHECKING:
     from .core import CF
 
 _MAX_FLOOR_ITERS = 10_000
+
+# Sentinel for gimme_min_term_digits: use gosper's current global threshold.
+# An explicit int overrides it; None disables gimme (raise on an exact boundary).
+_GIMME_DEFAULT = -1
 
 
 def _bounds_iter(cf: CF) -> Iterator[tuple[Fraction, Fraction]]:
@@ -43,18 +50,24 @@ def _bounds_iter(cf: CF) -> Iterator[tuple[Fraction, Fraction]]:
         yield last, last
 
 
-def _floor_quotient(x: CF, y: CF) -> int:
+def _floor_quotient(x: CF, y: CF, gimme_min_term_digits: int | None = _GIMME_DEFAULT) -> int:
     """Return floor(x/y) as a plain int using rational convergent bounds.
 
     Maintains rational intervals [lo_x, hi_x] and [lo_y, hi_y] derived from
-    the convergents of *x* and *y*, and resolves floor(x/y) as soon as the
-    interval for x/y stops straddling an integer.
+    the convergents of *x* and *y* (exact Fractions — no float, at any
+    magnitude), and resolves floor(x/y) as soon as the interval for x/y stops
+    straddling an integer.
 
-    This avoids building a lazy CF for x/y and bypasses the stall limit
-    in the bihomographic algorithm.  The fundamental hard case — x/y exactly
-    equal to an integer, with both inputs independently irrational — cannot
-    terminate with any rational-approximation approach.
+    The hard case is x/y exactly an integer with both inputs irrational (e.g.
+    Pi/Pi = 1): the interval straddles that integer forever.  By the same
+    gimme rule as the Gosper paths, once the interval is narrower than
+    10^-gimme_min_term_digits while straddling integer K, accept x/y = K (so
+    floor = K).  ``None`` disables gimme and raises on such a boundary instead
+    (the old behaviour); the default uses gosper's shared threshold.
     """
+    if gimme_min_term_digits == _GIMME_DEFAULT:
+        gimme_min_term_digits = _gosper._GIMME_MIN_TERM_DIGITS
+
     x_bounds = _bounds_iter(x)
     y_bounds = _bounds_iter(y)
 
@@ -66,39 +79,44 @@ def _floor_quotient(x: CF, y: CF) -> int:
             raise ZeroDivisionError("floor division by zero")
 
         if lo_y > 0:
-            # x/y is maximised at hi_x/lo_y and minimised at lo_x/hi_y
-            f_lo = math.floor(lo_x / hi_y)
-            f_hi = math.floor(hi_x / lo_y)
-            if f_lo == f_hi:
-                return f_lo
+            # x/y is minimised at lo_x/hi_y and maximised at hi_x/lo_y
+            val_lo, val_hi = lo_x / hi_y, hi_x / lo_y
         elif hi_y < 0:
             # Negative y flips the monotonicity
-            f_lo = math.floor(hi_x / hi_y)
-            f_hi = math.floor(lo_x / lo_y)
-            if f_lo == f_hi:
-                return f_lo
-        # else: y bounds straddle zero (e.g. first convergent of a fraction in (0,1)
-        # is 0); keep narrowing — true y != 0 will resolve on the next iteration.
+            val_lo, val_hi = hi_x / hi_y, lo_x / lo_y
+        else:
+            # y bounds straddle zero (e.g. first convergent of a fraction in
+            # (0,1) is 0); keep narrowing — true y != 0 resolves next iteration.
+            continue
+
+        f_lo, f_hi = math.floor(val_lo), math.floor(val_hi)
+        if f_lo == f_hi:
+            return f_lo
+        # Straddle: floors disagree.  If the value is pinned within the gimme
+        # threshold of the straddled integer f_hi, accept it.
+        if gimme_min_term_digits is not None and val_hi - val_lo < Fraction(1, 10**gimme_min_term_digits):
+            return f_hi
 
     raise ArithmeticError(f"floor(x/y) did not converge after {_MAX_FLOOR_ITERS} iterations (x/y may be arbitrarily close to an integer)")
 
 
-def cf_floordiv(x: CF, y: CF) -> CF:
-    """Return floor(x/y) as a finite CF."""
+def cf_floordiv(x: CF, y: CF, gimme_min_term_digits: int | None = _GIMME_DEFAULT) -> CF:
+    """Return floor(x/y) as a finite CF.  See _floor_quotient for gimme."""
     from .core import CF as _CF
 
-    return _CF.from_int(_floor_quotient(x, y))
+    return _CF.from_int(_floor_quotient(x, y, gimme_min_term_digits))
 
 
-def cf_mod(x: CF, y: CF) -> CF:
+def cf_mod(x: CF, y: CF, gimme_min_term_digits: int | None = _GIMME_DEFAULT) -> CF:
     """Return x mod y as a CF.  Defined as x - y*floor(x/y).
 
     The result always has the same sign as y (Python/floor semantics).
     Uses _floor_quotient to obtain the integer n = floor(x/y), then computes
     x - n*y via a homographic scale (n*y) and a bihomographic subtraction,
-    avoiding a redundant intermediate lazy CF for x/y.
+    avoiding a redundant intermediate lazy CF for x/y.  See _floor_quotient
+    for the gimme parameter.
     """
     from .gosper import cf_homographic, cf_sub
 
-    n = _floor_quotient(x, y)
+    n = _floor_quotient(x, y, gimme_min_term_digits)
     return cf_sub(x, cf_homographic(y, n, 0, 0, 1))
