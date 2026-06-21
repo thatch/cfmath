@@ -92,6 +92,12 @@ _GIMME_MIN_TERM_DIGITS = int(os.environ.get("CFRAC_GIMME_MIN_TERM_DIGITS", "50")
 # in ~2.4*N terms in the worst (all-ones) case, so this leaves wide margin.
 _GIMME_REFINE_CAP = 50 * _GIMME_MIN_TERM_DIGITS + 1000
 
+# Consecutive non-emitting bihomographic terms before the gimme boundary check
+# kicks in.  Normal arithmetic emits within a few terms (stall stays below this),
+# so it never pays the exact-Fraction corner cost; only true stalls do.  Well
+# below the term count any digit threshold needs, so it never delays a gimme.
+_BI_GIMME_WARMUP = 16
+
 
 # ---------------------------------------------------------------------------
 # Helper: correct floor-based output check
@@ -242,6 +248,36 @@ def cf_homographic(x: CF, a: int, b: int, c: int, d: int) -> CF:
 #   new_e = e*t+f,  new_f = e,  new_g = g*t+h,  new_h = g
 
 
+def _bi_boundary(a: int, b: int, c: int, d: int, e: int, f: int, g: int, h: int) -> int | None:
+    """Gimme for the two-input transform, by the same rule as the metaCF gimme.
+
+    The four corners (x', y' ∈ {1, ∞}) bound the output value.  If they are all
+    finite and same-signed (no pole in the [1,∞)×[1,∞) rectangle) and span less
+    than 10^-_GIMME_MIN_TERM_DIGITS while straddling an integer, the partial
+    quotient we would otherwise emit has at least that many digits — strong
+    evidence the value is that near-rational.  Return the straddled integer (the
+    best rational the large suppressed term reveals); otherwise None.
+
+    This replaces the old fixed "emit after _MAX_STALL terms" rule, so an
+    exact-rational result like Ln(2)/Ln(2) = 1 resolves at the configured digit
+    threshold rather than a hard-coded term count.  See _metaCF_terms.
+    """
+    dens = (e, e + f, e + g, e + f + g + h)
+    if any(den == 0 for den in dens):
+        return None  # a corner at infinity: bracket unbounded, cannot pin
+    if len({den > 0 for den in dens}) != 1:
+        return None  # mixed signs: a pole lies in the rectangle
+    nums = (a, a + b, a + c, a + b + c + d)
+    vals = [Fraction(num, den) for num, den in zip(nums, dens)]
+    lo, hi = min(vals), max(vals)
+    if hi - lo >= Fraction(1, 10**_GIMME_MIN_TERM_DIGITS):
+        return None  # not pinned tightly enough yet
+    k = hi.numerator // hi.denominator  # floor(hi): the straddled integer
+    if lo >= k:
+        return None  # all corners share floor k — a normal emit, not a straddle
+    return k
+
+
 def _bihomographic_terms(
     x_iter: Iterator[int],
     y_iter: Iterator[int],
@@ -307,7 +343,13 @@ def _bihomographic_terms(
 
         # Prefer consuming from whichever input hasn't been started yet,
         # to ensure both tails are in the [1, ∞) domain before emitting.
-        if not x_started or (y_started and _should_ingest_x(a, b, c, d, e, f, g, h)):
+        #
+        # The float ranking can't separate corners closer than ~1e-16, so once a
+        # stall is underway (the value is near a boundary and we need to narrow
+        # past float precision to reach the gimme threshold) switch to the exact
+        # ranking.  Only stalling sequences pay it.
+        decide = _should_ingest_x_exact if stall >= _BI_GIMME_WARMUP else _should_ingest_x
+        if not x_started or (y_started and decide(a, b, c, d, e, f, g, h)):
             try:
                 t = next(x_iter)
                 x_started = True
@@ -347,23 +389,22 @@ def _bihomographic_terms(
                 continue
 
         stall += 1
-        if stall >= _MAX_STALL:
-            # Integer-boundary stall: the corners permanently straddle an
-            # integer because both inputs represent the same value
-            # (e.g. Ln(2)/Ln(2) = 1).  The max corner floor is the correct
-            # answer — a wrong answer would require the true value to be
-            # within ~10^-209 of the boundary (sound for all practical use).
-            # Emit it and terminate; there is nothing left after an exact integer.
-            corners_nd = [
-                (a, e),
-                (a + b, e + f),
-                (a + c, e + g),
-                (a + b + c + d, e + f + g + h),
-            ]
-            valid = [(num, den) for num, den in corners_nd if den != 0]
-            if valid and len({den > 0 for _, den in valid}) == 1:
-                yield max(num // den for num, den in valid)
-            return
+        # Integer-boundary stall: the corners straddle an integer because the
+        # value is exactly (or extremely near) a rational, e.g. Ln(2)/Ln(2) = 1.
+        # Accept it once the digit-based gimme is satisfied.  The warmup skips
+        # the check for normal fast-emitting arithmetic (stall stays small), so
+        # only genuinely stalling sequences pay the exact-Fraction corner cost.
+        if stall >= _BI_GIMME_WARMUP:
+            boundary = _bi_boundary(a, b, c, d, e, f, g, h)
+            if boundary is not None:
+                yield boundary
+                return
+        if stall >= _GIMME_REFINE_CAP:
+            raise ArithmeticError(
+                f"bihomographic stalled: read {stall} terms without pinning an "
+                f"output term or a near-rational boundary within "
+                f"10^-{_GIMME_MIN_TERM_DIGITS} (raise CFRAC_GIMME_MIN_TERM_DIGITS)"
+            )
 
 
 def _corner_val(num: int, den: int) -> float:

@@ -2,6 +2,8 @@
 
 from fractions import Fraction
 
+import pytest
+
 from cfmath import CF, Phi, Sqrt, convergent, convergents
 
 
@@ -301,3 +303,41 @@ class TestLargeCornerOverflow:
         assert (big + Sqrt(2)).take(2).terms[0] == 10**400 + 1
         # exact-rational result still resolves via the boundary handler
         assert ((big + 1) - big).take(3).terms == [1]
+
+
+class TestBihomographicGimme:
+    """An exact-rational result of +,-,*,/ on irrational inputs sits on an
+    integer boundary the corner check can never confirm.  The bihomographic
+    accepts it once the suppressed partial quotient would have at least
+    _GIMME_MIN_TERM_DIGITS digits — the same digit-based heuristic and config as
+    the metaCF gimme (replacing the old fixed term-count threshold).
+    """
+
+    def test_exact_rationals_resolve(self):
+        from cfmath import Pi
+
+        assert (Pi() - Pi()).take(3).terms == [0]
+        assert (Pi() / Pi()).take(3).terms == [1]
+        assert (Pi() * (2 / Pi())).take(3).terms == [2]
+        assert ((Sqrt(2) - 1) * (Sqrt(2) + 1)).take(3).terms == [1]
+        assert (Phi() * Phi() - Phi() - 1).take(3).terms == [0]
+
+    def test_genuine_irrational_unaffected(self):
+        """A non-rational result emits normally; the gimme never fires."""
+        from cfmath import Pi
+
+        # 2*pi = [6; 3, 1, 1, 7, 2, ...]
+        assert (Pi() + Pi()).take(6).terms == [6, 3, 1, 1, 7, 2]
+
+    def test_threshold_governs_resolution(self, monkeypatch):
+        """The digit threshold drives the decision: an unreachably high value
+        leaves the boundary unconfirmable within the refine cap, so it raises."""
+        import cfmath.gosper as gosper
+        from cfmath import Pi
+
+        assert (Pi() / Pi()).take(3).terms == [1]  # default resolves
+        # Unreachable threshold within a small refine budget -> raises (fast).
+        monkeypatch.setattr(gosper, "_GIMME_MIN_TERM_DIGITS", 100000)
+        monkeypatch.setattr(gosper, "_GIMME_REFINE_CAP", 30)
+        with pytest.raises(ArithmeticError, match="bihomographic stalled"):
+            (Pi() / Pi()).take(3)
