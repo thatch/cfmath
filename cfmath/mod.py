@@ -78,16 +78,17 @@ def _floor_quotient(x: CF, y: CF, gimme_min_term_digits: int | None = _GIMME_DEF
         if lo_y == hi_y == 0:
             raise ZeroDivisionError("floor division by zero")
 
-        if lo_y > 0:
-            # x/y is minimised at lo_x/hi_y and maximised at hi_x/lo_y
-            val_lo, val_hi = lo_x / hi_y, hi_x / lo_y
-        elif hi_y < 0:
-            # Negative y flips the monotonicity
-            val_lo, val_hi = hi_x / hi_y, lo_x / lo_y
-        else:
+        if not (lo_y > 0 or hi_y < 0):
             # y bounds straddle zero (e.g. first convergent of a fraction in
             # (0,1) is 0); keep narrowing — true y != 0 resolves next iteration.
             continue
+
+        # With y bounded away from 0, x/y is monotonic in each of x and y, so
+        # its extremes over the box lie at the corners.  Which corners depends on
+        # the signs of both x and y (the monotonicity in y flips with the sign of
+        # x), so take the min and max over all four rather than assume x > 0.
+        corners = (lo_x / lo_y, lo_x / hi_y, hi_x / lo_y, hi_x / hi_y)
+        val_lo, val_hi = min(corners), max(corners)
 
         f_lo, f_hi = math.floor(val_lo), math.floor(val_hi)
         if f_lo == f_hi:
