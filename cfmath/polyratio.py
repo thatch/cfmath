@@ -14,49 +14,22 @@ from __future__ import annotations
 
 from math import gcd
 
+from ._poly import add as _add
+from ._poly import content as _content
+from ._poly import mul as _mul
+from ._poly import primitive as _primitive
+from ._poly import strip as _strip
+from ._poly import sub as _sub
 from .core import CF
 from .gosper import _homographic_terms
 from .gosper_generalized import _n_ary_terms
 
 # ---------------------------------------------------------------------------
-# Integer polynomial arithmetic over ascending-degree lists
+# Integer polynomial arithmetic over ascending-degree lists.  The primitives
+# (strip/content/primitive/add/sub/mul) live in cfmath._poly, shared with the
+# meta-CF rebuild path in gosper; the routines below are specific to reducing
+# the rational function P(x)/Q(x) that PolyTransform carries.
 # ---------------------------------------------------------------------------
-
-
-def _strip(p: list[int]) -> list[int]:
-    while len(p) > 1 and p[-1] == 0:
-        p = p[:-1]
-    return p
-
-
-def _content(p: list[int]) -> int:
-    g = 0
-    for c in p:
-        g = gcd(g, abs(c))
-    return g or 1
-
-
-def _primitive(p: list[int]) -> list[int]:
-    g = _content(p)
-    return [c // g for c in p]
-
-
-def _add(p: list[int], q: list[int]) -> list[int]:
-    n = max(len(p), len(q))
-    return _strip([(p[i] if i < len(p) else 0) + (q[i] if i < len(q) else 0) for i in range(n)])
-
-
-def _sub(p: list[int], q: list[int]) -> list[int]:
-    n = max(len(p), len(q))
-    return _strip([(p[i] if i < len(p) else 0) - (q[i] if i < len(q) else 0) for i in range(n)])
-
-
-def _mul(p: list[int], q: list[int]) -> list[int]:
-    result = [0] * (len(p) + len(q) - 1)
-    for i, a in enumerate(p):
-        for j, b in enumerate(q):
-            result[i + j] += a * b
-    return _strip(result)
 
 
 def _pseudorem(p: list[int], q: list[int]) -> list[int]:

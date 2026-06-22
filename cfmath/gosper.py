@@ -51,6 +51,8 @@ from fractions import Fraction
 from typing import TYPE_CHECKING, Any, Callable, Iterator
 
 from ._backend import _annotate_cf
+from ._poly import add as _poly_add
+from ._poly import mul as _poly_mul
 from .quadratic import _periodic_mul, _periodic_square
 
 if TYPE_CHECKING:
@@ -629,52 +631,6 @@ def _poly_eval_scaled(coeffs: list[int], p: int, q: int, degree: int) -> int:
     for i, coeff in enumerate(coeffs):
         if coeff:
             out += coeff * p**i * q ** (degree - i)
-    return out
-
-
-def _poly_add(coeffs0: list[int], coeffs1: list[int]) -> list[int]:
-    """Add low-to-high polynomials."""
-    coeffs0, coeffs1 = sorted((coeffs0, coeffs1), key=len)
-    out = list(coeffs1)
-    for i, coeff in enumerate(coeffs0):
-        out[i] += coeff
-    return out
-
-
-def _poly_mul(coeffs0: list[int], coeffs1: list[int]) -> list[int]:
-    """Multiply low-to-high polynomials."""
-    if len(coeffs0) == 1:
-        k = coeffs0[0]
-        if k == 0:
-            return [0]
-        if k == 1:
-            return list(coeffs1)
-        return [k * c for c in coeffs1]
-    if len(coeffs1) == 1:
-        k = coeffs1[0]
-        if k == 0:
-            return [0]
-        if k == 1:
-            return list(coeffs0)
-        return [k * c for c in coeffs0]
-
-    nonzero0 = [i for i, c in enumerate(coeffs0) if c != 0]
-    if len(nonzero0) == 1:
-        shift = nonzero0[0]
-        k = coeffs0[shift]
-        return [0] * shift + [k * c for c in coeffs1]
-
-    nonzero1 = [i for i, c in enumerate(coeffs1) if c != 0]
-    if len(nonzero1) == 1:
-        shift = nonzero1[0]
-        k = coeffs1[shift]
-        return [0] * shift + [k * c for c in coeffs0]
-
-    out = [0] * (len(coeffs0) + len(coeffs1) - 1)
-    for i in nonzero0:
-        c0 = coeffs0[i]
-        for j in nonzero1:
-            out[i + j] += c0 * coeffs1[j]
     return out
 
 

@@ -17,7 +17,7 @@ from .gosper_cf import GosperBi, GosperGeneric, GosperMono
 from .hyperbolic import Cosh, Sinh, Tanh
 from .logarithm import Ln, Log, Log2, Log10
 from .polyratio import PolyTransform
-from .power import Cuberoot, Nthroot, Pow, PowCF, PowIntExponent, PowInterval, PowMode, PowMP
+from .power import Cuberoot, Nthroot, Pow, PowCF, PowInterval, PowIntExponent, PowMode, PowMP
 from .quadratic import Sqrt
 from .special import Gamma, Zeta
 from .trig import Cos, Sin, Tan, TrigMode

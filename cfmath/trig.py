@@ -373,6 +373,7 @@ def _SinMP(x: int | Fraction | CF) -> CF:
 
         from ._backend import _mpmath_cf
         from .convergents import convergent
+
         x_cf = x
 
         def _value_fn() -> object:
