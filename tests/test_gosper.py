@@ -346,16 +346,22 @@ class TestBihomographicGimme:
 
     def test_threshold_governs_resolution(self, monkeypatch):
         """The digit threshold drives the decision: an unreachably high value
-        leaves the boundary unconfirmable within the refine cap, so it raises."""
-        import cfmath.gosper as gosper
-        from cfmath import Pi
+        leaves the boundary unconfirmable within the refine cap, so it raises.
 
-        assert (Pi() / Pi()).take(3).terms == [1]  # default resolves
+        The inputs must be two *distinct* irrational CFs so the bihomographic
+        refinement actually runs: constants like ``Pi()`` are cached singletons,
+        so ``Pi() / Pi()`` short-circuits via the ``x is y`` identity in cf_div.
+        ``(Sqrt(2)-1)*(Sqrt(2)+1) == 1`` gives distinct factors with an exact
+        rational result that sits on the unconfirmable boundary.
+        """
+        import cfmath.gosper as gosper
+
+        assert ((Sqrt(2) - 1) * (Sqrt(2) + 1)).take(3).terms == [1]  # default resolves
         # Unreachable threshold within a small refine budget -> raises (fast).
         monkeypatch.setattr(gosper, "_GIMME_MIN_TERM_DIGITS", 100000)
         monkeypatch.setattr(gosper, "_GIMME_REFINE_CAP", 30)
         with pytest.raises(ArithmeticError, match="bihomographic stalled"):
-            (Pi() / Pi()).take(3)
+            ((Sqrt(2) - 1) * (Sqrt(2) + 1)).take(3)
 
 
 class TestMetaCFFIngestionStall:

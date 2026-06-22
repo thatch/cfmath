@@ -6,6 +6,7 @@ from fractions import Fraction
 from math import gcd
 from typing import Iterator
 
+from ._backend import _annotate_cf
 from .core import CF
 
 
@@ -167,7 +168,7 @@ def Nthroot(x: int | Fraction, k: int) -> CF:
     a_root = _integer_kth_root(a, k)
     b_root = _integer_kth_root(b, k)
     if a_root**k == a and b_root**k == b:
-        return CF.from_fraction(a_root, b_root)
+        return _annotate_cf(CF.from_fraction(a_root, b_root), ("Nthroot", x, k))
 
     # k=2: exact periodic CF via quadratic algorithm
     if k == 2:
@@ -175,10 +176,10 @@ def Nthroot(x: int | Fraction, k: int) -> CF:
 
         result = _cf_from_poly(b, 0, -a)
         if result is not None:
-            return result
+            return _annotate_cf(result, ("Nthroot", x, k))
 
     # General: exact lazy CF via polynomial tracking
-    return CF([], _source=_kthroot_cf_gen(a, b, k))
+    return _annotate_cf(CF([], _source=_kthroot_cf_gen(a, b, k)), ("Nthroot", x, k))
 
 
 def Cuberoot(n: int) -> CF:
@@ -189,7 +190,7 @@ def Cuberoot(n: int) -> CF:
     """
     if not isinstance(n, int) or n <= 0:
         raise ValueError(f"Cuberoot expects a positive integer, got {n!r}")
-    return Nthroot(n, 3)
+    return _annotate_cf(Nthroot(n, 3), ("Cuberoot", n))
 
 
 def _init_bracket_poly(a: int, b: int, p: int, q: int) -> list[int]:
@@ -338,7 +339,7 @@ def Pow(x: int | Fraction, r: int | Fraction | CF) -> CF:
         # Exp(r * Ln(x)) covers the full range numerically.
         # TODO: once the compose strategy is implemented (eliminating blowup), replace
         # the Exp path entirely with _pow_rational_cf_gen.
-        return Exp(r * Ln(x))
+        return _annotate_cf(Exp(r * Ln(x)), ("Pow", x, r))
 
     if isinstance(r, int):
         r = Fraction(r)
@@ -346,13 +347,13 @@ def Pow(x: int | Fraction, r: int | Fraction | CF) -> CF:
         raise TypeError(f"Pow() exponent expects int, Fraction, or CF, got {type(r).__name__}")
 
     if x == 1 or r == 0:
-        return CF.from_int(1)
+        return _annotate_cf(CF.from_int(1), ("Pow", x, r))
     if r == 1:
-        return CF.from_rational(x)
+        return _annotate_cf(CF.from_rational(x), ("Pow", x, r))
 
     # Integer exponent: exact rational
     if r.denominator == 1:
-        return CF.from_rational(x**r.numerator)
+        return _annotate_cf(CF.from_rational(x**r.numerator), ("Pow", x, r))
 
     # Rational exponent p/q: compute x^p exactly, then take q-th root
-    return Nthroot(x**r.numerator, r.denominator)
+    return _annotate_cf(Nthroot(x**r.numerator, r.denominator), ("Pow", x, r))

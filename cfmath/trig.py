@@ -5,7 +5,7 @@ from __future__ import annotations
 from fractions import Fraction
 from typing import Iterator
 
-from ._backend import _coerce_trig_arg
+from ._backend import _annotate_cf, _coerce_trig_arg
 from .core import CF
 
 # ---------------------------------------------------------------------------
@@ -113,9 +113,9 @@ def Tan(x: int | Fraction) -> CF:
     """
     x = _coerce_trig_arg(x)
     if x == 0:
-        return CF.from_int(0)
+        return _annotate_cf(CF.from_int(0), ("Tan", x))
     denom_cf = CF.from_generalized_cf(_tan_pairs(x))
-    return CF.from_rational(x) / denom_cf
+    return _annotate_cf(CF.from_rational(x) / denom_cf, ("Tan", x))
 
 
 def Sin(x: int | Fraction) -> CF:
@@ -132,8 +132,8 @@ def Sin(x: int | Fraction) -> CF:
     """
     x = _coerce_trig_arg(x)
     if x == 0:
-        return CF.from_int(0)
-    return CF.from_rational(x) / CF.from_generalized_cf(_sin_pairs(x))
+        return _annotate_cf(CF.from_int(0), ("Sin", x))
+    return _annotate_cf(CF.from_rational(x) / CF.from_generalized_cf(_sin_pairs(x)), ("Sin", x))
 
 
 def Cos(x: int | Fraction) -> CF:
@@ -150,5 +150,5 @@ def Cos(x: int | Fraction) -> CF:
     """
     x = _coerce_trig_arg(x)
     if x == 0:
-        return CF.from_int(1)
-    return CF.from_int(1) / CF.from_generalized_cf(_cos_pairs(x))
+        return _annotate_cf(CF.from_int(1), ("Cos", x))
+    return _annotate_cf(CF.from_int(1) / CF.from_generalized_cf(_cos_pairs(x)), ("Cos", x))

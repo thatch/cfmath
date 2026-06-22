@@ -36,15 +36,16 @@ _PI_FLOAT = math.pi
 
 
 def _pi_with_corruptions(corruptions: dict[int, int], n_cached: int = 110) -> CF:
-    """Return a Pi whose cache has been surgically mutated.
+    """Return a fresh CF copy of Pi with selected terms replaced.
 
-    Forces the first *n_cached* terms into the cache, then replaces the
-    terms at the given positions with the supplied (wrong) values.  This
-    is the minimal model of a generator that emitted wrong terms before
-    a recant that never arrived.
+    Forces the first *n_cached* terms out of Pi, copies them into a new CF,
+    then replaces the terms at the given positions with the supplied
+    (wrong) values.  This is the minimal model of a generator that emitted
+    wrong terms before a recant that never arrived, without mutating the
+    cached Pi singleton itself.
     """
-    pi = Pi()
-    list(pi.take(n_cached))  # warm the cache
+    prefix = list(Pi().take(n_cached))
+    pi = CF.from_terms(prefix)
     for pos, val in corruptions.items():
         pi._cache[pos] = val
     return pi

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from fractions import Fraction
 
-from ._backend import _HAS_MPMATH, _lazy_cf
+from ._backend import _HAS_MPMATH, _annotate_cf, _lazy_cf
 from .core import CF
 
 
@@ -122,7 +122,7 @@ def Ln(x: int | Fraction | CF) -> CF:
             raise ValueError("Ln of non-positive number")
 
         x_cf: CF = x
-        return _lazy_cf(lambda n: _ln_terms_from_cf(x_cf, n))
+        return _lazy_cf(lambda n: _ln_terms_from_cf(x_cf, n), debug_source=("Ln", x_cf))
 
     if isinstance(x, int):
         x = Fraction(x)
@@ -131,12 +131,12 @@ def Ln(x: int | Fraction | CF) -> CF:
     if x <= 0:
         raise ValueError("Ln of non-positive number")
     if x == 1:
-        return CF.from_int(0)
+        return _annotate_cf(CF.from_int(0), ("Ln", x))
 
     num, den = x.numerator, x.denominator
     if _HAS_MPMATH:
-        return _lazy_cf(lambda n: _ln_terms_from_mpmath(num, den, n))
-    return _lazy_cf(lambda n: _ln_terms_from_decimal(num, den, n))
+        return _lazy_cf(lambda n: _ln_terms_from_mpmath(num, den, n), debug_source=("Ln", x))
+    return _lazy_cf(lambda n: _ln_terms_from_decimal(num, den, n), debug_source=("Ln", x))
 
 
 def _coerce_log_arg(x: int | Fraction | CF) -> Fraction | None:

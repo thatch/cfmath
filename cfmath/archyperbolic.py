@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from fractions import Fraction
 
-from ._backend import _HAS_MPMATH, _coerce_trig_arg, _lazy_cf
+from ._backend import _HAS_MPMATH, _annotate_cf, _coerce_trig_arg, _lazy_cf
 from .core import CF
 
 # ---------------------------------------------------------------------------
@@ -193,11 +193,11 @@ def Arctanh(x: int | Fraction) -> CF:
     if abs(x) >= 1:
         raise ValueError(f"Arctanh argument must satisfy |x| < 1, got {x}")
     if x == 0:
-        return CF.from_int(0)
+        return _annotate_cf(CF.from_int(0), ("Arctanh", x))
     ratio = (Fraction(1) + x) / (Fraction(1) - x)
     from .logarithm import Ln
 
-    return Ln(ratio) / CF.from_int(2)
+    return _annotate_cf(Ln(ratio) / CF.from_int(2), ("Arctanh", x))
 
 
 def Arcsinh(x: int | Fraction) -> CF:
@@ -215,11 +215,11 @@ def Arcsinh(x: int | Fraction) -> CF:
     """
     x = _coerce_trig_arg(x)
     if x == 0:
-        return CF.from_int(0)
+        return _annotate_cf(CF.from_int(0), ("Arcsinh", x))
     num, den = x.numerator, x.denominator
     if _HAS_MPMATH:
-        return _lazy_cf(lambda n: _arcsinh_terms_mpmath(num, den, n))
-    return _lazy_cf(lambda n: _arcsinh_terms_from_decimal(num, den, n))
+        return _lazy_cf(lambda n: _arcsinh_terms_mpmath(num, den, n), debug_source=("Arcsinh", x))
+    return _lazy_cf(lambda n: _arcsinh_terms_from_decimal(num, den, n), debug_source=("Arcsinh", x))
 
 
 def Arccosh(x: int | Fraction) -> CF:
@@ -240,8 +240,8 @@ def Arccosh(x: int | Fraction) -> CF:
     if x < 1:
         raise ValueError(f"Arccosh argument must satisfy x ≥ 1, got {x}")
     if x == 1:
-        return CF.from_int(0)
+        return _annotate_cf(CF.from_int(0), ("Arccosh", x))
     num, den = x.numerator, x.denominator
     if _HAS_MPMATH:
-        return _lazy_cf(lambda n: _arccosh_terms_mpmath(num, den, n))
-    return _lazy_cf(lambda n: _arccosh_terms_from_decimal(num, den, n))
+        return _lazy_cf(lambda n: _arccosh_terms_mpmath(num, den, n), debug_source=("Arccosh", x))
+    return _lazy_cf(lambda n: _arccosh_terms_from_decimal(num, den, n), debug_source=("Arccosh", x))

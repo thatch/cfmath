@@ -352,11 +352,14 @@ class TestNaryGimmeAndOverflow:
 
     def test_shared_config_governs(self, monkeypatch):
         import cfmath.gosper as gosper
-        from cfmath import Pi
 
-        assert cf_div(Pi(), Pi()).take(3).terms == [1]
+        # Distinct irrational inputs with an exact rational result: cached
+        # constants make ``Pi() is Pi()`` true, which would short-circuit before
+        # the refinement runs.  ``(Sqrt(2)-1)*(Sqrt(2)+1) == 1`` keeps the inputs
+        # distinct so the n-ary refinement path is exercised.
+        assert cf_mul(Sqrt(2) - 1, Sqrt(2) + 1).take(3).terms == [1]
         # The generalized module reads gosper's constants at runtime.
         monkeypatch.setattr(gosper, "_GIMME_MIN_TERM_DIGITS", 100000)
         monkeypatch.setattr(gosper, "_GIMME_REFINE_CAP", 30)
         with pytest.raises(ArithmeticError, match="n-ary Gosper stalled"):
-            cf_div(Pi(), Pi()).take(3)
+            cf_mul(Sqrt(2) - 1, Sqrt(2) + 1).take(3)
