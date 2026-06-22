@@ -30,7 +30,7 @@ from cfmath import (
     Zeta,
     convergent,
 )
-from cfmath.arctrig import ArctanCF
+from cfmath.arctrig import _ArctanCF as ArctanCF
 from cfmath.exponential import ExpCF
 from cfmath.logarithm import LnCF, Log2CF, Log10CF, LogCF
 from cfmath.trig import _CosCF as CosCF

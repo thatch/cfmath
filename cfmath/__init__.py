@@ -6,7 +6,7 @@ except ImportError:  # pragma: no cover
     __version__ = "dev"
 
 from .archyperbolic import Arccosh, Arcsinh, Arctanh
-from .arctrig import Arccos, Arcsin, Arctan, ArctanCF, ArctanGCF, ArctanMP, ArctrigMode
+from .arctrig import Arccos, Arcsin, Arctan, ArctrigMode
 from .constants import Apery, Catalan, E, EulerGamma, Khinchin, Phi, Pi, Plastic, Tau
 from .convergents import convergent, convergent_pair, convergent_pairs, convergents
 from .core import CF
@@ -55,9 +55,6 @@ __all__ = [
     "Arcsin",
     "Arccos",
     "Arctan",
-    "ArctanGCF",
-    "ArctanCF",
-    "ArctanMP",
     "ArctrigMode",
     "Sinh",
     "Cosh",

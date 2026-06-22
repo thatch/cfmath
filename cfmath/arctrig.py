@@ -127,7 +127,7 @@ def _arccos_terms_mpmath(x_num: int, x_den: int, n_terms: int) -> list[int]:
 # ---------------------------------------------------------------------------
 
 
-def ArctanGCF(x: int | Fraction) -> CF:
+def _ArctanGCF(x: int | Fraction) -> CF:
     """Arctangent of x (in radians), as a continued fraction.
 
     x may be an int or Fraction.  Returns CF([0]) for x=0.
@@ -145,7 +145,7 @@ def ArctanGCF(x: int | Fraction) -> CF:
     return _annotate_cf(CF.from_rational(x) / CF.from_generalized_cf(_arctan_pairs(x)), ("Arctan", x))
 
 
-def ArctanCF(x: int | Fraction | CF, mode: ArctrigMode | str | None = None) -> CF:
+def _ArctanCF(x: int | Fraction | CF, mode: ArctrigMode | str | None = None) -> CF:
     """Arctangent of x, using the meta-GCF path.
 
     Rewrites arctan(x) as arctan(1/z) where z = 1/x ≥ 1, evaluating the
@@ -167,17 +167,17 @@ def ArctanCF(x: int | Fraction | CF, mode: ArctrigMode | str | None = None) -> C
     if x_cf == zero:
         return zero
     if x_cf < zero:
-        return -ArctanCF(-x_cf, mode=mode)
+        return -_ArctanCF(-x_cf, mode=mode)
     if x_cf > one:
         from .constants import Pi
 
-        return Pi() / 2 - ArctanCF(1 / x_cf, mode=mode)
+        return Pi() / 2 - _ArctanCF(1 / x_cf, mode=mode)
 
     z = 1 / x_cf  # z ≥ 1
     return 1 / cf_metaGCF(z, _arctan_meta_gcf_terms())
 
 
-def ArctanMP(x: int | Fraction | CF) -> CF:
+def _ArctanMP(x: int | Fraction | CF) -> CF:
     """Arctangent of x using mpmath term extraction."""
     if isinstance(x, CF):
         import mpmath
@@ -194,16 +194,14 @@ def Arctan(x: int | Fraction | CF, mode: ArctrigMode | str | None = None) -> CF:
     mode = _coerce_arctrig_mode(mode)
     if mode is ArctrigMode.AUTO:
         if isinstance(x, CF):
-            return ArctanCF(x)
-        return ArctanGCF(x)
+            return _ArctanCF(x)
+        return _ArctanGCF(x)
     if mode is ArctrigMode.GCF:
-        if isinstance(x, CF):
-            raise TypeError("ArctanGCF requires int or Fraction, not CF")
-        return ArctanGCF(x)
+        return _ArctanGCF(x)  # type: ignore[arg-type]
     if mode is ArctrigMode.CF:
-        return ArctanCF(x)
+        return _ArctanCF(x)
     if mode is ArctrigMode.MP:
-        return ArctanMP(x)
+        return _ArctanMP(x)
     raise AssertionError(f"unhandled inverse trig mode {mode!r}")
 
 
