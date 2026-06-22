@@ -161,6 +161,23 @@ class TestCatalan:
         assert _catalan_terms_from_decimal(30) == reference
 
 
+class TestExtractCfTerms:
+    def test_huge_partial_quotient_not_truncated_by_float_underflow(self):
+        """A partial quotient large enough that frac underflows a double must
+        still be extracted, since mpmath retains the precision to continue."""
+        import mpmath
+
+        from cfmath._backend import _extract_cf_terms
+
+        mpmath.mp.dps = 700
+        # 5 + 1e-330: next partial quotient ~10^330; frac=1e-330 underflows a
+        # double to 0.0, but mpmath at 700 dps can still resolve it.
+        assert float(mpmath.mpf(10) ** -330) == 0.0  # the underflow that bit
+        terms = _extract_cf_terms(mpmath.mpf(5) + mpmath.mpf(10) ** -330)
+        assert terms[0] == 5
+        assert len(str(terms[1])) in (330, 331)  # the ~10^330 term survives
+
+
 class TestApery:
     def test_apery_first_terms(self):
         assert list(Apery().take(8)) == [1, 4, 1, 18, 1, 1, 1, 4]

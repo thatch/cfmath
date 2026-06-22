@@ -64,8 +64,6 @@ def _extract_cf_terms(x: Any, guard_bits: int = 64) -> list[int]:
     without any per-constant tuning, and also catches exhaustion by many
     moderate-sized terms (which a simple ``frac < threshold`` check misses).
     """
-    import math
-
     import mpmath
 
     available = float(mpmath.mp.prec - guard_bits)
@@ -77,10 +75,14 @@ def _extract_cf_terms(x: Any, guard_bits: int = 64) -> list[int]:
         terms.append(a)
         if frac == 0:
             break
-        f = float(frac)
-        if f == 0.0:
-            break  # underflows double — precision definitely gone
-        log_q -= math.log2(f)  # log2(1/frac) = -log2(frac)
+        # Track log2 of the convergent denominator with mpmath, not float(frac).
+        # A huge partial quotient makes frac underflow a double to 0.0, which
+        # would stop extraction even when mpmath still has the precision to go on
+        # (and escalating dps wouldn't help — float underflows at any dps).
+        # mpmath.log of a tiny frac is a moderate number; the precision check
+        # below — comparing the cost against available bits — is the real and
+        # only stopping rule.
+        log_q -= float(mpmath.log(frac, 2))  # log2(1/frac) = -log2(frac)
         if 2.0 * log_q > available:
             break
         x = 1 / frac

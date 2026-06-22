@@ -2,6 +2,8 @@
 
 from fractions import Fraction
 
+import pytest
+
 from cfmath import CF, Phi, Sqrt, convergent, convergents
 
 
@@ -287,3 +289,88 @@ class TestHomographic:
         x = CF.from_fraction(5, 11)
         y = cf_homographic(x, 3, 0, 0, 1)
         assert _eval(y) == Fraction(15, 11)
+
+    def test_constant_map_terminates_on_infinite_input(self):
+        """A degenerate (constant) map of an infinite input terminates.
+
+        After emitting the constant the denominator becomes identically zero
+        (value ∞ = CF ended).  Without that check the loop would ingest forever
+        and now raise; it must return the finite CF instead.
+        """
+        from cfmath import Pi
+        from cfmath.gosper import cf_homographic
+
+        # (0*Pi + 5)/(0*Pi + 1) = 5
+        assert cf_homographic(Pi(), 0, 5, 0, 1).take(3).terms == [5]
+        # (0*Pi + 7)/(0*Pi + 2) = 7/2 = [3; 2]
+        assert cf_homographic(Pi(), 0, 7, 0, 2).take(4).terms == [3, 2]
+
+
+class TestLargeCornerOverflow:
+    """A bihomographic corner can exceed the float range when a coefficient is
+    huge (e.g. a CF with a large integer part).  The ingest-ordering heuristic
+    converts corners to float, which used to raise OverflowError; it must fall
+    back gracefully instead."""
+
+    def test_huge_integer_part_does_not_overflow(self):
+        big = CF([10**400])  # ~1e400, far past the float range
+        # Completes (no OverflowError) and floors correctly: 10**400 + sqrt(2).
+        assert (big + Sqrt(2)).take(2).terms[0] == 10**400 + 1
+        # exact-rational result still resolves via the boundary handler
+        assert ((big + 1) - big).take(3).terms == [1]
+
+
+class TestBihomographicGimme:
+    """An exact-rational result of +,-,*,/ on irrational inputs sits on an
+    integer boundary the corner check can never confirm.  The bihomographic
+    accepts it once the suppressed partial quotient would have at least
+    _GIMME_MIN_TERM_DIGITS digits — the same digit-based heuristic and config as
+    the metaCF gimme (replacing the old fixed term-count threshold).
+    """
+
+    def test_exact_rationals_resolve(self):
+        from cfmath import Pi
+
+        assert (Pi() - Pi()).take(3).terms == [0]
+        assert (Pi() / Pi()).take(3).terms == [1]
+        assert (Pi() * (2 / Pi())).take(3).terms == [2]
+        assert ((Sqrt(2) - 1) * (Sqrt(2) + 1)).take(3).terms == [1]
+        assert (Phi() * Phi() - Phi() - 1).take(3).terms == [0]
+
+    def test_genuine_irrational_unaffected(self):
+        """A non-rational result emits normally; the gimme never fires."""
+        from cfmath import Pi
+
+        # 2*pi = [6; 3, 1, 1, 7, 2, ...]
+        assert (Pi() + Pi()).take(6).terms == [6, 3, 1, 1, 7, 2]
+
+    def test_threshold_governs_resolution(self, monkeypatch):
+        """The digit threshold drives the decision: an unreachably high value
+        leaves the boundary unconfirmable within the refine cap, so it raises."""
+        import cfmath.gosper as gosper
+        from cfmath import Pi
+
+        assert (Pi() / Pi()).take(3).terms == [1]  # default resolves
+        # Unreachable threshold within a small refine budget -> raises (fast).
+        monkeypatch.setattr(gosper, "_GIMME_MIN_TERM_DIGITS", 100000)
+        monkeypatch.setattr(gosper, "_GIMME_REFINE_CAP", 30)
+        with pytest.raises(ArithmeticError, match="bihomographic stalled"):
+            (Pi() / Pi()).take(3)
+
+
+class TestMetaCFFIngestionStall:
+    """When the meta-CF F itself fails to determine an output term at the current
+    x-bracket (F not converging), the metaCF now raises rather than silently
+    truncating.  Distinct from the near-rational x-refinement gimme."""
+
+    def test_nonconverging_F_raises(self, monkeypatch):
+        import cfmath.gosper as gosper
+
+        monkeypatch.setattr(gosper, "_METACF_STALL_LIMIT", 8)
+
+        def bad_F():
+            while True:
+                yield [0, 1]  # term polynomial = x; the output never pins
+
+        with pytest.raises(ArithmeticError, match=r"ingested \d+ terms of F"):
+            gosper.cf_metaCF(Sqrt(2), bad_F()).take(2)

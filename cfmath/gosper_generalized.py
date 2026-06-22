@@ -88,13 +88,15 @@ Bill Gosper, HAKMEM, MIT AI Memo 239, 1972, items 101–101C.
 
 from __future__ import annotations
 
+from fractions import Fraction
 from typing import TYPE_CHECKING, Iterator
+
+# Reference gosper's gimme constants at runtime (not copied at import) so one
+# config — CFRAC_GIMME_MIN_TERM_DIGITS, or a monkeypatch — governs both modules.
+from . import gosper as _gosper
 
 if TYPE_CHECKING:
     from .core import CF
-
-
-_MAX_STALL = 1000
 
 
 # ---------------------------------------------------------------------------
@@ -165,30 +167,53 @@ def _emit(num: list[int], den: list[int], t: int) -> tuple[list[int], list[int]]
 
 def _corner_val_float(num: list[int], den: list[int], c: int) -> float:
     cd = _corner_sum(den, c)
+    cn = _corner_sum(num, c)
     if cd == 0:
-        cn = _corner_sum(num, c)
         return float("inf") if cn >= 0 else float("-inf")
-    return _corner_sum(num, c) / cd
+    try:
+        return cn / cd
+    except OverflowError:
+        # Corner beyond the float range; only used for relative spread.
+        return float("inf") if (cn > 0) == (cd > 0) else float("-inf")
 
 
-def _input_spread(num: list[int], den: list[int], n: int, j: int, done: int) -> float:
-    """Max variation of output corners as input j varies from 1 to ∞."""
+def _input_spread(num: list[int], den: list[int], n: int, j: int, done: int, exact: bool) -> float | Fraction:
+    """Max variation of output corners as input j varies from 1 to ∞.
+
+    On floats by default (the hot path); ``exact`` uses Fractions, needed once a
+    stall is underway because floats can't separate corners closer than ~1e-16,
+    which would otherwise cap how far the bracket can narrow.  ``float("inf")``
+    marks an infinite spread (a corner at projective infinity) in both modes.
+    """
     mask = 1 << j
-    max_spread = 0.0
+    max_spread: float | Fraction = Fraction(0) if exact else 0.0
     for c in range(1 << n):
         if not (c & mask):
             continue  # need the j=∞ corner
         if (c & done) != done:
             continue  # done inputs must be at ∞
-        v_inf = _corner_val_float(num, den, c)  # j at ∞
-        v_one = _corner_val_float(num, den, c & ~mask)  # j at 1
-        if abs(v_inf) == float("inf") or abs(v_one) == float("inf"):
-            return float("inf")
-        max_spread = max(max_spread, abs(v_inf - v_one))
+        spread: float | Fraction
+        if exact:
+            cd_inf, cd_one = _corner_sum(den, c), _corner_sum(den, c & ~mask)
+            inf_at_infinity = cd_inf == 0
+            one_at_infinity = cd_one == 0
+            if inf_at_infinity and one_at_infinity:
+                continue  # both at the same projective point: no spread
+            if inf_at_infinity or one_at_infinity:
+                return float("inf")
+            spread = abs(Fraction(_corner_sum(num, c), cd_inf) - Fraction(_corner_sum(num, c & ~mask), cd_one))
+        else:
+            v_inf = _corner_val_float(num, den, c)  # j at ∞
+            v_one = _corner_val_float(num, den, c & ~mask)  # j at 1
+            if abs(v_inf) == float("inf") or abs(v_one) == float("inf"):
+                return float("inf")
+            spread = abs(v_inf - v_one)
+        if spread > max_spread:
+            max_spread = spread
     return max_spread
 
 
-def _pick_input(num: list[int], den: list[int], n: int, started: int, done: int) -> int:
+def _pick_input(num: list[int], den: list[int], n: int, started: int, done: int, exact: bool = False) -> int:
     """Return index of the next input to consume.
 
     Priority: unstarted inputs first (to enter the [1,∞) domain);
@@ -203,17 +228,50 @@ def _pick_input(num: list[int], den: list[int], n: int, started: int, done: int)
 
     # All inputs started; find max-spread non-done input.
     best_j = -1
-    best_spread = -1.0
+    best_spread: float | Fraction = -1.0
     for j in range(n):
         if done & (1 << j):
             continue
         if best_j == -1:
             best_j = j  # ensure we always return a valid index
-        s = _input_spread(num, den, n, j, done)
+        s = _input_spread(num, den, n, j, done, exact)
         if s > best_spread:
             best_spread = s
             best_j = j
     return best_j
+
+
+def _n_ary_boundary(num: list[int], den: list[int], done: int) -> int | None:
+    """Gimme for the n-ary transform, the same digit rule as gosper._bi_boundary.
+
+    If every relevant corner (done inputs at ∞) is finite, same-signed, and the
+    corners span less than 10^-_GIMME_MIN_TERM_DIGITS while straddling an integer,
+    return that integer; otherwise None.
+    """
+    n = len(num).bit_length() - 1
+    vals: list[Fraction] = []
+    sign: bool | None = None
+    for c in range(1 << n):
+        if (c & done) != done:
+            continue
+        cd = _corner_sum(den, c)
+        if cd == 0:
+            return None  # corner at infinity: bracket unbounded
+        s = cd > 0
+        if sign is None:
+            sign = s
+        elif s != sign:
+            return None  # pole in range
+        vals.append(Fraction(_corner_sum(num, c), cd))
+    if not vals:
+        return None
+    lo, hi = min(vals), max(vals)
+    if hi - lo >= Fraction(1, 10**_gosper._GIMME_MIN_TERM_DIGITS):
+        return None
+    k = hi.numerator // hi.denominator
+    if lo >= k:
+        return None
+    return k
 
 
 # ---------------------------------------------------------------------------
@@ -253,8 +311,9 @@ def _n_ary_terms(
                 yield from _CF.from_fraction(cn, cd)
             return
 
-        # Pick next input and consume one term.
-        j = _pick_input(num, den, n, started, done)
+        # Pick next input and consume one term.  Use exact spread ranking once a
+        # stall is underway, so the bracket can narrow past float precision.
+        j = _pick_input(num, den, n, started, done, exact=stall >= _gosper._BI_GIMME_WARMUP)
         if j < 0:
             return
 
@@ -269,20 +328,21 @@ def _n_ary_terms(
             stall = 0
             continue
 
-        if stall >= _MAX_STALL:
-            # Integer-boundary stall: emit max corner floor and terminate.
-            # Mirrors the same fix in gosper.py — see comments there.
-            n_bits = len(num).bit_length() - 1
-            valid = []
-            for c in range(1 << n_bits):
-                if (c & done) != done:
-                    continue
-                cd = _corner_sum(den, c)
-                if cd != 0:
-                    valid.append((_corner_sum(num, c), cd))
-            if valid and len({cd > 0 for _, cd in valid}) == 1:
-                yield max(cn // cd for cn, cd in valid)
-            return
+        # Integer-boundary stall: an exact-rational result (e.g. x - x = 0) sits
+        # on a boundary the corner check can never confirm.  Accept it by the
+        # same digit-based gimme and shared config as gosper.py; raise if it
+        # cannot be pinned within the refine cap.
+        if stall >= _gosper._BI_GIMME_WARMUP:
+            boundary = _n_ary_boundary(num, den, done)
+            if boundary is not None:
+                yield boundary
+                return
+        if stall >= _gosper._GIMME_REFINE_CAP:
+            raise ArithmeticError(
+                f"n-ary Gosper stalled: read {stall} terms without pinning an "
+                f"output term or a near-rational boundary within "
+                f"10^-{_gosper._GIMME_MIN_TERM_DIGITS} (raise CFRAC_GIMME_MIN_TERM_DIGITS)"
+            )
 
 
 # ---------------------------------------------------------------------------

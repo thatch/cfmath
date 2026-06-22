@@ -206,3 +206,52 @@ class TestDivmod:
         q, r = divmod(-17, frac(5))
         assert q == frac(-4)
         assert r == frac(3)
+
+
+class TestFloorQuotientGimme:
+    """floor(x/y) at an exact-integer boundary (e.g. Pi/Pi = 1) straddles
+    forever.  By default the shared gimme resolves it; gimme_min_term_digits=None
+    restores the old raise behaviour.  The bounds are exact Fractions, so there
+    is no float plateau — only the boundary itself is undecidable."""
+
+    def test_exact_boundary_resolves_by_default(self):
+        from cfmath.mod import _floor_quotient
+
+        assert _floor_quotient(Pi(), Pi()) == 1
+        assert (Pi() // Pi()).take(2).terms == [1]
+
+    def test_gimme_none_raises(self, monkeypatch):
+        import cfmath.mod as mod
+
+        # Small cap keeps it fast — without gimme it never resolves Pi/Pi.
+        monkeypatch.setattr(mod, "_MAX_FLOOR_ITERS", 50)
+        with pytest.raises(ArithmeticError, match="did not converge"):
+            mod._floor_quotient(Pi(), Pi(), gimme_min_term_digits=None)
+
+    def test_normal_cases_unaffected(self):
+        from cfmath.mod import _floor_quotient
+
+        assert _floor_quotient(Pi(), Sqrt(2)) == 2  # ~2.22
+        assert _floor_quotient(CF.from_int(10), CF.from_int(3)) == 3
+
+
+class TestFloorNegativeNumerator:
+    """floor(x/y) for irrational operands with a negative numerator.
+
+    The value interval x/y is monotonic in each variable, but the monotonicity
+    in y flips with the sign of x, so the corner selection must consider all
+    four corners.  An earlier version assumed x > 0 and returned wrong floors
+    for negative irrational numerators (rational inputs hid it: a degenerate box
+    makes every corner equal)."""
+
+    def test_negative_over_irrational_nonboundary(self):
+        from cfmath.mod import _floor_quotient
+
+        # floor(-5*sqrt2 / sqrt3) = floor(-4.082...) = -5  (not a boundary)
+        assert _floor_quotient(Sqrt(2) * -5, Sqrt(3)) == -5
+        assert _floor_quotient(Sqrt(2) * 7, Sqrt(3)) == 5  # 7*1.414/1.732 = 5.71
+
+    def test_negative_irrational_boundary_via_gimme(self):
+        # (x*n)/x = n exactly for negative irrational x; gimme must give floor n.
+        for x, n in [(Sqrt(2) - Pi(), 29), (Sqrt(3) - Pi(), 24)]:
+            assert ((x * n) // x).take(2).terms == [n]

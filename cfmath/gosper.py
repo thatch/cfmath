@@ -46,6 +46,7 @@ Bill Gosper, HAKMEM, MIT AI Memo 239, 1972, items 101-101B.
 
 from __future__ import annotations
 
+import os
 from fractions import Fraction
 from typing import TYPE_CHECKING, Callable, Iterator
 
@@ -55,7 +56,45 @@ if TYPE_CHECKING:
     from .core import CF
 
 
-_MAX_STALL = 1000  # max input terms consumed per output term before giving up
+# Max non-emitting iterations before _metaCF_simple_terms gives up and raises.
+# The simple reference path cannot detect an exact-rational result; given more
+# budget it emits a spurious near-rational term (like the mpmath backend) rather
+# than raising, so this stays small enough to raise first (garbage appears past
+# ~125).  Override with CFRAC_METACF_STALL_LIMIT.
+_METACF_STALL_LIMIT = int(os.environ.get("CFRAC_METACF_STALL_LIMIT", "100"))
+
+# Max extra terms of x read in the main path when gimme is OFF
+# (gimme_min_term_digits=None) before raising on a stall.  Unlike the simple
+# path, the main path never emits a spurious term, so this can be generous: it
+# bounds how large a legitimate partial quotient an irrational result may have
+# before it is wrongly rejected (~one digit per ~2.4 terms), so 200 admits
+# ~80-digit terms.  Override with CFRAC_METACF_NONE_STALL_LIMIT.
+_METACF_NONE_STALL_LIMIT = int(os.environ.get("CFRAC_METACF_NONE_STALL_LIMIT", "200"))
+
+# "Gimme" mode: when a stall persists, the value sits within 10^-N of an integer
+# boundary, where N (the digit count of the partial quotient we would otherwise
+# emit) grows as we refine.  Once N reaches this threshold, gimme declares the
+# value exactly that boundary — the best rational the large suppressed term
+# reveals — and stops, with error < 10^-N.  See the discussion in
+# _metaCF_terms.  The threshold must exceed the largest partial quotient (in
+# digits) of any value you consider legitimate rather than a coincidental
+# near-rational.  Calibration points: Ramanujan's constant e^(pi*sqrt(163)) is
+# an integer to ~12 digits; fib(360)/fib(216) is a near-integer (~Lucas(144))
+# to ~30 digits, with a 31-digit partial quotient.  The default clears both.
+# Set to None to disable gimme (raise on stall instead).  Override with
+# CFRAC_GIMME_MIN_TERM_DIGITS.
+_GIMME_MIN_TERM_DIGITS = int(os.environ.get("CFRAC_GIMME_MIN_TERM_DIGITS", "50"))
+
+# Safety net: even with gimme on, cap total refinements so a pathological input
+# (bracket failing to shrink) cannot loop forever.  Refinement reaches N digits
+# in ~2.4*N terms in the worst (all-ones) case, so this leaves wide margin.
+_GIMME_REFINE_CAP = 50 * _GIMME_MIN_TERM_DIGITS + 1000
+
+# Consecutive non-emitting bihomographic terms before the gimme boundary check
+# kicks in.  Normal arithmetic emits within a few terms (stall stays below this),
+# so it never pays the exact-Fraction corner cost; only true stalls do.  Well
+# below the term count any digit threshold needs, so it never delays a gimme.
+_BI_GIMME_WARMUP = 16
 
 
 # ---------------------------------------------------------------------------
@@ -159,6 +198,12 @@ def _homographic_terms(
             a, b, c, d = c, d, a - n * c, b - n * d
             continue
 
+        if c == 0 and d == 0:
+            # Denominator is identically zero: the value is ∞, i.e. the CF has
+            # terminated (a finite/rational result fully emitted, e.g. a constant
+            # map like (0x+5)/(0x+1) = 5).  Nothing remains.
+            return
+
         if x_done:
             # x exhausted: tail x' → ∞, value is a/c
             if c == 0:
@@ -178,8 +223,18 @@ def _homographic_terms(
         # Ingest: substitute x = t + 1/x'
         a, b, c, d = a * t + b, a, c * t + d, c
         stall += 1
-        if stall >= _MAX_STALL:
-            return
+        # A one-input transform of a canonical CF always emits or terminates:
+        # an exact-rational output is the degenerate map handled above, and a
+        # near-rational output needs a near-rational *input*, whose large partial
+        # quotient pins the floor in a single read before the bracket can shrink
+        # to a boundary gimme.  (The two-input path differs: correlated inputs,
+        # e.g. x - x, narrow gradually with no large term, so it has a gimme.)
+        # A long stall therefore means a malformed/non-canonical input; fail loud.
+        if stall >= _GIMME_REFINE_CAP:
+            raise ArithmeticError(
+                f"homographic stalled: read {stall} terms without pinning an "
+                f"output term (likely a malformed input)"
+            )
 
 
 def cf_homographic(x: CF, a: int, b: int, c: int, d: int) -> CF:
@@ -205,6 +260,36 @@ def cf_homographic(x: CF, a: int, b: int, c: int, d: int) -> CF:
 # Ingest term t from y (substitute y = t + 1/y'):
 #   new_a = a*t+b,  new_b = a,  new_c = c*t+d,  new_d = c
 #   new_e = e*t+f,  new_f = e,  new_g = g*t+h,  new_h = g
+
+
+def _bi_boundary(a: int, b: int, c: int, d: int, e: int, f: int, g: int, h: int) -> int | None:
+    """Gimme for the two-input transform, by the same rule as the metaCF gimme.
+
+    The four corners (x', y' ∈ {1, ∞}) bound the output value.  If they are all
+    finite and same-signed (no pole in the [1,∞)×[1,∞) rectangle) and span less
+    than 10^-_GIMME_MIN_TERM_DIGITS while straddling an integer, the partial
+    quotient we would otherwise emit has at least that many digits — strong
+    evidence the value is that near-rational.  Return the straddled integer (the
+    best rational the large suppressed term reveals); otherwise None.
+
+    This replaces the old fixed "emit after N input terms" rule, so an
+    exact-rational result like Ln(2)/Ln(2) = 1 resolves at the configured digit
+    threshold rather than a hard-coded term count.  See _metaCF_terms.
+    """
+    dens = (e, e + f, e + g, e + f + g + h)
+    if any(den == 0 for den in dens):
+        return None  # a corner at infinity: bracket unbounded, cannot pin
+    if len({den > 0 for den in dens}) != 1:
+        return None  # mixed signs: a pole lies in the rectangle
+    nums = (a, a + b, a + c, a + b + c + d)
+    vals = [Fraction(num, den) for num, den in zip(nums, dens)]
+    lo, hi = min(vals), max(vals)
+    if hi - lo >= Fraction(1, 10**_GIMME_MIN_TERM_DIGITS):
+        return None  # not pinned tightly enough yet
+    k = hi.numerator // hi.denominator  # floor(hi): the straddled integer
+    if lo >= k:
+        return None  # all corners share floor k — a normal emit, not a straddle
+    return k
 
 
 def _bihomographic_terms(
@@ -272,7 +357,13 @@ def _bihomographic_terms(
 
         # Prefer consuming from whichever input hasn't been started yet,
         # to ensure both tails are in the [1, ∞) domain before emitting.
-        if not x_started or (y_started and _should_ingest_x(a, b, c, d, e, f, g, h)):
+        #
+        # The float ranking can't separate corners closer than ~1e-16, so once a
+        # stall is underway (the value is near a boundary and we need to narrow
+        # past float precision to reach the gimme threshold) switch to the exact
+        # ranking.  Only stalling sequences pay it.
+        decide = _should_ingest_x_exact if stall >= _BI_GIMME_WARMUP else _should_ingest_x
+        if not x_started or (y_started and decide(a, b, c, d, e, f, g, h)):
             try:
                 t = next(x_iter)
                 x_started = True
@@ -312,30 +403,30 @@ def _bihomographic_terms(
                 continue
 
         stall += 1
-        if stall >= _MAX_STALL:
-            # Integer-boundary stall: the corners permanently straddle an
-            # integer because both inputs represent the same value
-            # (e.g. Ln(2)/Ln(2) = 1).  The max corner floor is the correct
-            # answer — a wrong answer would require the true value to be
-            # within ~10^-209 of the boundary (sound for all practical use).
-            # Emit it and terminate; there is nothing left after an exact integer.
-            corners_nd = [
-                (a, e),
-                (a + b, e + f),
-                (a + c, e + g),
-                (a + b + c + d, e + f + g + h),
-            ]
-            valid = [(num, den) for num, den in corners_nd if den != 0]
-            if valid and len({den > 0 for _, den in valid}) == 1:
-                yield max(num // den for num, den in valid)
-            return
+        # Integer-boundary stall: the corners straddle an integer because the
+        # value is exactly (or extremely near) a rational, e.g. Ln(2)/Ln(2) = 1.
+        # Accept it once the digit-based gimme is satisfied.  The warmup skips
+        # the check for normal fast-emitting arithmetic (stall stays small), so
+        # only genuinely stalling sequences pay the exact-Fraction corner cost.
+        if stall >= _BI_GIMME_WARMUP:
+            boundary = _bi_boundary(a, b, c, d, e, f, g, h)
+            if boundary is not None:
+                yield boundary
+                return
+        if stall >= _GIMME_REFINE_CAP:
+            raise ArithmeticError(
+                f"bihomographic stalled: read {stall} terms without pinning an "
+                f"output term or a near-rational boundary within "
+                f"10^-{_GIMME_MIN_TERM_DIGITS} (raise CFRAC_GIMME_MIN_TERM_DIGITS)"
+            )
 
 
 def _corner_val(num: int, den: int) -> float:
-    """Safe float value of num/den for spread calculations.
+    """Float value of num/den for spread calculations.
 
     Returns `float("inf")` for all infinite results, never `float("-inf")`
-    (There is only one inifinty in projective space P^1.)
+    (there is only one infinity in projective space P^1).  Raises OverflowError
+    when num/den exceeds the float range; callers fall back to exact arithmetic.
     """
     if den == 0:
         return float("inf")
@@ -357,23 +448,22 @@ def _should_ingest_x(
     Compares how much the four corner values spread apart when x varies (1→∞)
     versus when y varies (1→∞).  Whichever input causes more spread in the output
     is the one that most needs to be pinned down by reading its next term.
+
+    The decision runs on floats (this is the hot per-iteration path).  A corner
+    past the float range (~1e308, only with hundreds of digits in a coefficient)
+    overflows; that call falls back to exact rational arithmetic, which is slow
+    but reached only by pathological inputs.
     """
     # Corners: (∞,∞), (∞,1), (1,∞), (1,1)
-    c00 = _corner_val(a, e)  # (∞, ∞)
-    c01 = _corner_val(a + b, e + f)  # (∞, 1)
-    c10 = _corner_val(a + c, e + g)  # (1, ∞)
-    c11 = _corner_val(a + b + c + d, e + f + g + h)  # (1, 1)
+    try:
+        c00 = _corner_val(a, e)  # (∞, ∞)
+        c01 = _corner_val(a + b, e + f)  # (∞, 1)
+        c10 = _corner_val(a + c, e + g)  # (1, ∞)
+        c11 = _corner_val(a + b + c + d, e + f + g + h)  # (1, 1)
+    except OverflowError:
+        return _should_ingest_x_exact(a, b, c, d, e, f, g, h)
 
-    def _spread(v1: float, v2: float, v3: float, v4: float) -> float:
-        finite = [v for v in (v1, v2, v3, v4) if abs(v) != float("inf")]
-        if len(finite) < 2:
-            return float("inf")
-        return max(finite) - min(finite)
-
-    # x-spread: corners varying x' (1→∞) with y' fixed
-    _spread(c00, c10, c01, c11)  # all four corners
-    # y-spread: corners varying y' (1→∞) with x' fixed
-    # As a proxy, compare the x-direction range vs y-direction range:
+    # Compare the x-direction range vs the y-direction range.
     sx_inf = abs(c00 - c10)  # x: ∞ vs 1, with y=∞
     sx_one = abs(c01 - c11)  # x: ∞ vs 1, with y=1
     sy_inf = abs(c00 - c01)  # y: ∞ vs 1, with x=∞
@@ -387,6 +477,40 @@ def _should_ingest_x(
     if spread_x == float("inf"):
         return True
     if spread_y == float("inf"):
+        return False
+    return spread_x >= spread_y
+
+
+def _should_ingest_x_exact(a: int, b: int, c: int, d: int, e: int, f: int, g: int, h: int) -> bool:
+    """Exact-rational fallback for _should_ingest_x when a corner overflows float.
+
+    ``None`` is projective infinity (den == 0).  Two infinities are the *same*
+    point, so a direction with both endpoints at infinity has zero spread; a
+    direction mixing finite and infinite has infinite spread.
+    """
+
+    def corner(num: int, den: int) -> Fraction | None:
+        return None if den == 0 else Fraction(num, den)
+
+    c00, c01 = corner(a, e), corner(a + b, e + f)
+    c10, c11 = corner(a + c, e + g), corner(a + b + c + d, e + f + g + h)
+
+    def dist(p: Fraction | None, q: Fraction | None) -> Fraction | None:
+        if p is None and q is None:
+            return Fraction(0)
+        if p is None or q is None:
+            return None  # infinite spread
+        return abs(p - q)
+
+    def spread(d1: Fraction | None, d2: Fraction | None) -> Fraction | None:
+        return None if (d1 is None or d2 is None) else max(d1, d2)
+
+    spread_x = spread(dist(c00, c10), dist(c01, c11))
+    spread_y = spread(dist(c00, c01), dist(c10, c11))
+
+    if spread_x is None:
+        return True
+    if spread_y is None:
         return False
     return spread_x >= spread_y
 
@@ -454,9 +578,20 @@ def _metaCF_simple_terms(x: CF, F_iter: Iterator[Callable[[CF], CF]]) -> Iterato
         # Ingest: substitute F = t + 1/F'
         a, b, c, d = b + a * t, a, d + c * t, c
 
+        # As in _metaCF_terms, an exact-boundary value (e.g. Exp(Ln(2)) = 2)
+        # leaves the two corners floored one apart no matter how many F terms
+        # we ingest — no interval check can confirm it.  Fail loudly instead of
+        # silently truncating (which would return a wrong CF for values like
+        # Exp(Ln(7/4)) = 8/3 = [2; 1, 2]).
         stall += 1
-        if stall >= _MAX_STALL // 50:
-            return
+        if stall >= _METACF_STALL_LIMIT:
+            raise ArithmeticError(
+                f"metaCF stalled: ingested {stall} terms of F without pinning an "
+                f"output term (corners floor to {n0} and {n1}).  The value is "
+                f"likely exactly the integer boundary {max(n0, n1)}, which an "
+                f"interval corner check cannot confirm.  Raise "
+                f"CFRAC_METACF_STALL_LIMIT to allow more iterations."
+            )
 
 
 def cf_metaCF_simple(x: CF, F_iter: Iterator[Callable[[CF], CF]]) -> CF:
@@ -473,7 +608,11 @@ def cf_metaCF_simple(x: CF, F_iter: Iterator[Callable[[CF], CF]]) -> CF:
     return _CF([], _source=_metaCF_simple_terms(x, F_iter))
 
 
-def _metaCF_terms(x: CF, F_iter: Iterator[list[int]]) -> Iterator[int]:
+def _metaCF_terms(
+    x: CF,
+    F_iter: Iterator[list[int]],
+    gimme_min_term_digits: int | None = _GIMME_MIN_TERM_DIGITS,
+) -> Iterator[int]:
     """Yield CF terms of (aF+b)/(cF+d) given the CF terms of F, one at a time.
 
     All terms of F and coefficients of the 'homographic' (in F) state are
@@ -640,6 +779,7 @@ def _metaCF_terms(x: CF, F_iter: Iterator[list[int]]) -> Iterator[int]:
 
     x_i = 1
     stall = 0
+    refine_stall = 0
     F_done = False
     x_CHANGED = True
 
@@ -685,6 +825,7 @@ def _metaCF_terms(x: CF, F_iter: Iterator[list[int]]) -> Iterator[int]:
             nn = n0
             yield nn
             stall = 0
+            refine_stall = 0
             # Subtract n, take reciprocal: (a,b,c,d) → (c, d, a-nc, b-nd)
             a, b, c, d = c, d, padd(a, pmul([-nn], c)), padd(b, pmul([-nn], d))
             a0, b0, c0, d0 = c0, d0, a0 - nn * c0, b0 - nn * d0
@@ -698,8 +839,47 @@ def _metaCF_terms(x: CF, F_iter: Iterator[list[int]]) -> Iterator[int]:
 
         if n0 is not None and n1 is not None:
             # coefficient polynomials were precise enough to determine n0, n1
-            # at each q0, q1 with q0 <= x <= q1,
-            # but x was too vague for n0 to equal n1; iterate on x
+            # at each q0, q1 with q0 <= x <= q1, but x was too vague for n0 to
+            # equal n1; read another term of x to tighten the [q0, q1] bracket.
+            #
+            # This makes progress only if the true value lies strictly inside
+            # the bracket.  When the value sits *exactly* on the integer
+            # boundary between n0 and n1 (e.g. Exp(Ln(2)) = 2, an exact integer
+            # produced from an infinite input), every bracket around x straddles
+            # it, so n0 and n1 never agree and this branch refines x forever.
+            # No interval-based corner check can resolve an exact-boundary value.
+            #
+            # The width of the value bracket bounds how close the true value is
+            # to the straddled integer K = max(n0, n1): the four corners are the
+            # homographic evaluated at each x-endpoint (q0, q1) and each F'-tail
+            # endpoint (1, inf).  If that width is below 10^-gimme_min_term_digits
+            # the partial quotient we would otherwise emit has at least that many
+            # digits — strong evidence the value is the near-rational K.  In
+            # gimme mode, declare it exactly K and stop (error < 10^-digits);
+            # otherwise refine until the stall cap, then raise.
+            if gimme_min_term_digits is not None:
+                corners = [
+                    Fraction(a0, c0),
+                    Fraction(a0 + b0, c0 + d0),
+                    Fraction(a1, c1),
+                    Fraction(a1 + b1, c1 + d1),
+                ]
+                width = max(corners) - min(corners)
+                if width != 0 and width < Fraction(1, 10**gimme_min_term_digits):
+                    yield max(n0, n1)
+                    return
+
+            refine_stall += 1
+            cap = _METACF_NONE_STALL_LIMIT if gimme_min_term_digits is None else _GIMME_REFINE_CAP
+            if refine_stall >= cap:
+                raise ArithmeticError(
+                    f"metaCF stalled: read {refine_stall} extra terms of x without "
+                    f"pinning an output term (corners floor to {n0} and {n1}). "
+                    f"The value is likely exactly the integer boundary {max(n0, n1)}, "
+                    f"which an interval corner check cannot confirm.  Enable gimme "
+                    f"mode (gimme_min_term_digits=) to accept the near-rational, or "
+                    f"raise CFRAC_METACF_STALL_LIMIT."
+                )
             x_i += 1
             x_CHANGED = True
             continue
@@ -743,11 +923,22 @@ def _metaCF_terms(x: CF, F_iter: Iterator[list[int]]) -> Iterator[int]:
             n1 = _homo_output_simple(a1, b1, c1, d1)
 
         stall += 1
-        if stall >= _MAX_STALL // 10:
-            return
+        if stall >= _METACF_STALL_LIMIT:
+            # F failed to determine an output term after this many ingestions
+            # (F not converging at the current x-bracket).  A near-rational
+            # *result* is caught earlier by the x-refinement gimme; reaching here
+            # is a genuine failure, so raise rather than silently truncate.
+            raise ArithmeticError(
+                f"metaCF stalled: ingested {stall} terms of F without determining "
+                f"an output term (F not converging at the current x-bracket)"
+            )
 
 
-def cf_metaCF(x: CF, F: Iterator[list[int]]) -> CF:
+def cf_metaCF(
+    x: CF,
+    F: Iterator[list[int]],
+    gimme_min_term_digits: int | None = _GIMME_MIN_TERM_DIGITS,
+) -> CF:
     """Return the CF for F(x), where F is a CF of polynomials of x.
 
     Each polynomial is represented as a list of int coefficients, where
@@ -760,10 +951,16 @@ def cf_metaCF(x: CF, F: Iterator[list[int]]) -> CF:
     In order to ensure efficient convergence, F should have
     (all but finitely many) terms guaranteed to be in [1, ∞]
     for the domain of x-values F operates on.
+
+    ``gimme_min_term_digits`` controls gimme mode: when the result hugs an
+    integer boundary so closely that the next partial quotient would have at
+    least this many digits, accept it as that exact rational rather than
+    refining forever (see ``_metaCF_terms``).  Set to None to raise on stall
+    instead.
     """
     from .core import CF as _CF
 
-    return _CF([], _source=_metaCF_terms(x, F))
+    return _CF([], _source=_metaCF_terms(x, F, gimme_min_term_digits))
 
 
 # ---------------------------------------------------------------------------
