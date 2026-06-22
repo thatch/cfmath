@@ -28,7 +28,11 @@ def strip(p: list[int]) -> list[int]:
 
 
 def content(p: list[int]) -> int:
-    """Return the GCD of the coefficients (1 for the zero polynomial)."""
+    """Return the GCD of the coefficients (1 for the zero polynomial).
+
+    This is the GCD of a set of integers, so it does not care about coefficient
+    order; descending-degree callers (power's Nthroot engine) may use it too.
+    """
     g = 0
     for c in p:
         g = gcd(g, abs(c))

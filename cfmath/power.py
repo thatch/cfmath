@@ -5,10 +5,10 @@ from __future__ import annotations
 import math as _math
 from enum import Enum
 from fractions import Fraction
-from math import gcd
 from typing import Any, Iterator
 
 from ._backend import _HAS_MPMATH, _annotate_cf, _lazy_cf
+from ._poly import content as _poly_content
 from .core import CF
 
 PowArg = int | Fraction | CF
@@ -81,10 +81,13 @@ def _horner_update(coeffs: list[int], a: int) -> list[int]:
 
 
 def _reduce_coeffs(coeffs: list[int]) -> list[int]:
-    """Divide all coefficients by their GCD to keep magnitudes small."""
-    g = 0
-    for c in coeffs:
-        g = gcd(g, abs(c))
+    """Divide all coefficients by their GCD to keep magnitudes small.
+
+    The Nthroot engine stores coefficients in descending degree, but the content
+    is just the GCD of the integers, so the order does not matter.  Skip the
+    rebuild when the GCD is already 1 — the common case once content is stripped.
+    """
+    g = _poly_content(coeffs)
     return [c // g for c in coeffs] if g > 1 else coeffs
 
 
