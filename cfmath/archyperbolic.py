@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from fractions import Fraction
 
-from ._backend import _HAS_MPMATH, _annotate_cf, _coerce_trig_arg, _lazy_cf
+from ._backend import _HAS_MPMATH, _annotate_cf, _coerce_trig_arg, _lazy_cf, _mpmath_cf_for_cf_arg
 from .core import CF
 
 # ---------------------------------------------------------------------------
@@ -19,6 +19,8 @@ def _arcsinh_terms_from_decimal(x_num: int, x_den: int, n_terms: int) -> list[in
     Works for all real x.
     """
     import decimal
+
+    from .logarithm import _decimal_ln2
 
     prec = n_terms * 5 + 80
     ctx = decimal.Context(prec=prec, rounding=decimal.ROUND_FLOOR)
@@ -42,7 +44,7 @@ def _arcsinh_terms_from_decimal(x_num: int, x_den: int, n_terms: int) -> list[in
         x = decimal.Decimal(x_num) / decimal.Decimal(x_den)
         inner = x + (x * x + 1).sqrt()
 
-        ln2 = _two_atanh(decimal.Decimal(1) / decimal.Decimal(3))
+        ln2 = _decimal_ln2(prec)
         n = 0
         reduced = inner
         while reduced >= 2:
@@ -74,6 +76,8 @@ def _arccosh_terms_from_decimal(x_num: int, x_den: int, n_terms: int) -> list[in
     """
     import decimal
 
+    from .logarithm import _decimal_ln2
+
     prec = n_terms * 5 + 80
     ctx = decimal.Context(prec=prec, rounding=decimal.ROUND_FLOOR)
     with decimal.localcontext(ctx):
@@ -99,7 +103,7 @@ def _arccosh_terms_from_decimal(x_num: int, x_den: int, n_terms: int) -> list[in
         if inner <= eps:
             return [0]
 
-        ln2 = _two_atanh(decimal.Decimal(1) / decimal.Decimal(3))
+        ln2 = _decimal_ln2(prec)
         n = 0
         reduced = inner
         while reduced >= 2:
@@ -175,20 +179,16 @@ def _arctanh_terms_mpmath(x_num: int, x_den: int, n_terms: int) -> list[int]:
 # ---------------------------------------------------------------------------
 
 
-def Arctanh(x: int | Fraction) -> CF:
+def Arctanh(x: int | Fraction | CF) -> CF:
     """Inverse hyperbolic tangent of x, as a continued fraction.
 
-    x may be an int or Fraction; must satisfy |x| < 1.
-    Returns CF([0]) for x=0.
-    Uses the identity arctanh(x) = ln((1+x)/(1-x)) / 2 via existing Ln
-    (no external library required).
-
-    Examples::
-
-        Arctanh(0)               # [0]
-        Arctanh(Fraction(1, 2))  # [0; 1, 1, 4, 1, 1, 3, ...]
-        Arctanh(Fraction(1, 4))  # [0; 3, 1, 10, 1, ...]
+    For int/Fraction, uses arctanh(x) = ln((1+x)/(1-x)) / 2 (|x| < 1 required).
+    For CF input, uses the mpmath dual-precision convergent approach.
     """
+    if isinstance(x, CF):
+        import mpmath
+
+        return _mpmath_cf_for_cf_arg(x, mpmath.atanh)
     x = _coerce_trig_arg(x)
     if abs(x) >= 1:
         raise ValueError(f"Arctanh argument must satisfy |x| < 1, got {x}")
@@ -200,19 +200,16 @@ def Arctanh(x: int | Fraction) -> CF:
     return _annotate_cf(Ln(ratio) / CF.from_int(2), ("Arctanh", x))
 
 
-def Arcsinh(x: int | Fraction) -> CF:
+def Arcsinh(x: int | Fraction | CF) -> CF:
     """Inverse hyperbolic sine of x, as a continued fraction.
 
-    x may be an int or Fraction.  Returns CF([0]) for x=0.
-    Uses arcsinh(x) = ln(x + sqrt(x²+1)).
-    Dispatches to mpmath when available, else Decimal.
-
-    Examples::
-
-        Arcsinh(0)               # [0]
-        Arcsinh(1)               # [0; 1, 5, 1, 1, ...]
-        Arcsinh(Fraction(1, 2))  # [0; 2, 12, 1, 5, ...]
+    For int/Fraction, uses arcsinh(x) = ln(x + sqrt(x²+1)).
+    For CF input, uses the mpmath dual-precision convergent approach.
     """
+    if isinstance(x, CF):
+        import mpmath
+
+        return _mpmath_cf_for_cf_arg(x, mpmath.asinh)
     x = _coerce_trig_arg(x)
     if x == 0:
         return _annotate_cf(CF.from_int(0), ("Arcsinh", x))
@@ -222,20 +219,16 @@ def Arcsinh(x: int | Fraction) -> CF:
     return _lazy_cf(lambda n: _arcsinh_terms_from_decimal(num, den, n), debug_source=("Arcsinh", x))
 
 
-def Arccosh(x: int | Fraction) -> CF:
+def Arccosh(x: int | Fraction | CF) -> CF:
     """Inverse hyperbolic cosine of x, as a continued fraction.
 
-    x may be an int or Fraction; must satisfy x ≥ 1.
-    Returns CF([0]) for x=1.
-    Uses arccosh(x) = ln(x + sqrt(x²-1)).
-    Dispatches to mpmath when available, else Decimal.
-
-    Examples::
-
-        Arccosh(1)               # [0]
-        Arccosh(2)               # [1; 3, 1, 3, 1, ...]
-        Arccosh(Fraction(3, 2))  # [0; 1, 3, 3, 1, ...]
+    For int/Fraction, uses arccosh(x) = ln(x + sqrt(x²-1)) (x ≥ 1 required).
+    For CF input, uses the mpmath dual-precision convergent approach.
     """
+    if isinstance(x, CF):
+        import mpmath
+
+        return _mpmath_cf_for_cf_arg(x, mpmath.acosh)
     x = _coerce_trig_arg(x)
     if x < 1:
         raise ValueError(f"Arccosh argument must satisfy x ≥ 1, got {x}")

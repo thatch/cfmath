@@ -1,68 +1,49 @@
 """Tests for power and root functions."""
 
 import math
-import sys
 from fractions import Fraction
 
 import pytest
 
-from cfmath import CF, Cuberoot, Nthroot, Pi, Pow, Sqrt, convergent
-from cfmath.logarithm import Ln
+from cfmath import (
+    CF,
+    Cuberoot,
+    Nthroot,
+    Pow,
+    PowCF,
+    PowInterval,
+    PowIntExponent,
+    PowMode,
+    PowMP,
+    Sqrt,
+    convergent,
+    convergents,
+)
 from cfmath.power import (
-    _bracket_floor,
-    _floor_kth_root_rational,
-    _horner_update,
-    _init_bracket_poly,
-    _pow_rational_cf_gen,
+    _cf_interval,
+    _floor_at_corner,
+    _integer_kth_root,
+    _v_cmp,
 )
 
 
-class TestHornerUpdate:
-    def test_degree3_matches_manual_formula(self):
-        # For f(y) = Ay^3 + By^2 + Cy + D after substituting y = a + 1/z:
-        # new coefficients should be [f(a), f'(a), f''(a)/2, A]
-        A, B, C, D, a = -1, 3, 3, 1, 3
-        result = _horner_update([A, B, C, D], a)
-        fa = A * a**3 + B * a**2 + C * a + D
-        fp = 3 * A * a**2 + 2 * B * a + C
-        fpp = 3 * A * a + B
-        assert result == [fa, fp, fpp, A]
-
-    def test_degree2_matches_sqrt_expansion(self):
-        # f(y) = -y^2 + 2 (for sqrt(2), with leading -1 after normalization)
-        # at a=1: new coeffs = [f(1), f'(1), -1] = [1, -2, -1]
-        result = _horner_update([-1, 0, 2], 1)
-        assert result == [1, -2, -1]
-
-    def test_preserves_root(self):
-        # After substitution, the root of the new polynomial at any a should
-        # be 1/(root - a) when root > a.
-        # For cbrt(2): starts with [1, 0, 0, -2], root = cbrt(2) ≈ 1.2599, a=1
-        # new polynomial root should be 1/(cbrt(2) - 1) ≈ 3.849
-        new_coeffs = _horner_update([1, 0, 0, -2], 1)
-        assert new_coeffs == [-1, 3, 3, 1]
-
-
-class TestFloorKthRootRational:
-    def test_integer_inputs(self):
-        assert _floor_kth_root_rational(2, 1, 3) == 1  # cbrt(2) ≈ 1.26
-        assert _floor_kth_root_rational(8, 1, 3) == 2  # cbrt(8) = 2 exactly
-        assert _floor_kth_root_rational(9, 1, 3) == 2  # cbrt(9) ≈ 2.08
-
-    def test_fraction_less_than_one(self):
-        assert _floor_kth_root_rational(1, 8, 3) == 0  # (1/8)^(1/3) = 0.5
-
-    def test_fraction_between_integers(self):
-        assert _floor_kth_root_rational(2, 3, 3) == 0  # (2/3)^(1/3) ≈ 0.874
-        assert _floor_kth_root_rational(3, 2, 3) == 1  # (3/2)^(1/3) ≈ 1.145
+def _integer_cbrt(n: int) -> int:
+    return _integer_kth_root(n, 3)
 
 
 class TestCuberoot:
-    def test_perfect_cubes(self):
-        assert Cuberoot(1).terms == [1]
-        assert Cuberoot(8).terms == [2]
-        assert Cuberoot(27).terms == [3]
-        assert Cuberoot(125).terms == [5]
+    def test_integer_cbrt_floor_edges(self):
+        assert _integer_cbrt(-1) == 0
+        assert _integer_cbrt(0) == 0
+        assert _integer_cbrt(63) == 3
+        assert _integer_cbrt(64) == 4
+        assert _integer_cbrt(65) == 4
+
+    def test_cuberoot_8_is_2(self):
+        cf = Cuberoot(8)
+        convs = list(convergents(cf))
+        val = float(convs[-1])
+        assert abs(val - 2.0) < 1e-8
 
     def test_cuberoot_2_value(self):
         val = float(convergent(Cuberoot(2).take(15), 14))
@@ -164,7 +145,12 @@ class TestPow:
     def test_one_exponent(self):
         assert Pow(Fraction(3, 4), 1) == CF.from_rational(Fraction(3, 4))
 
-    def test_integer_exponent_exact(self):
+    def test_pow_base_one_short_circuits_even_for_cf_exponent(self):
+        from cfmath import Pi
+
+        assert Pow(1, Pi()) == CF.from_int(1)
+
+    def test_pow_integer_exponent_exact(self):
         assert Pow(2, 3) == CF.from_int(8)
         assert Pow(Fraction(2, 3), 2) == CF.from_rational(Fraction(4, 9))
 
@@ -202,12 +188,29 @@ class TestPow:
         val = float(convergent(Pow(2, Fraction(3, 2)).take(20), 19))
         assert abs(val - 2**1.5) < 1e-8
 
-    def test_cf_exponent(self):
-        result = Pow(2, Pi())
-        expected = math.exp(math.pi * math.log(2))
-        assert abs(float(result) - expected) < 1e-8
+    def test_pow_mode_cf(self):
+        val = float(convergent(Pow(2, Fraction(3, 2), PowMode.CF).take(20), 19))
+        assert abs(val - 2**1.5) < 1e-8
 
-    def test_bad_type_base(self):
+    def test_pow_mode_mp(self):
+        val = float(convergent(Pow(2, Fraction(3, 2), PowMode.MP).take(20), 19))
+        assert abs(val - 2**1.5) < 1e-8
+
+    def test_pow_mode_int(self):
+        assert Pow(2, 3, PowMode.INT) == CF.from_int(8)
+
+    def test_pow_string_mode_still_works(self):
+        assert Pow(2, 3, "int") == CF.from_int(8)
+
+    def test_pow_unknown_mode_raises(self):
+        with pytest.raises(ValueError):
+            Pow(2, 3, "bogus")
+
+    def test_pow_bad_mode_type_raises(self):
+        with pytest.raises(TypeError):
+            Pow(2, 3, object())  # type: ignore[arg-type]
+
+    def test_pow_bad_type_base(self):
         with pytest.raises(TypeError):
             Pow(1.5, Fraction(1, 2))
 
@@ -222,123 +225,114 @@ class TestPow:
             Pow(-1, Fraction(1, 2))
 
 
-class TestCFPow:
-    def test_fraction_half_finite_base(self):
-        result = CF.from_int(4) ** Fraction(1, 2)
-        assert result.terms == [2]
+class TestPowIntervalHelpers:
+    def test_cf_interval_for_finite_cf_collapses(self):
+        assert _cf_interval(CF.from_rational(Fraction(3, 2)), 3) == (Fraction(3, 2), Fraction(3, 2))
 
-    def test_fraction_half_infinite_base(self):
-        result = Sqrt(2) ** Fraction(1, 2)
-        val = float(convergent(result.take(20), 19))
-        assert abs(val - 2**0.25) < 1e-10
+    def test_cf_interval_orders_odd_and_even_depths(self):
+        lo1, hi1 = _cf_interval(Sqrt(2), 1)
+        lo2, hi2 = _cf_interval(Sqrt(2), 2)
 
-    def test_cf_exponent(self):
-        result = Sqrt(2) ** Pi()
-        expected = math.exp(math.pi / 2 * math.log(2))
-        assert abs(float(result) - expected) < 1e-8
+        assert lo1 < hi1
+        assert lo2 < hi2
+        assert lo2 <= Fraction(99, 70) <= hi2
 
-    def test_rpow_int(self):
-        result = 2 ** Pi()
-        expected = math.exp(math.pi * math.log(2))
-        assert abs(float(result) - expected) < 1e-8
+    def test_v_cmp_handles_negative_zero_and_positive_thresholds(self):
+        assert _v_cmp(2, 1, 3, 1, Fraction(-1)) > 0
+        assert _v_cmp(0, 1, 1, 1, Fraction(0)) == 0
+        assert _v_cmp(2, 1, 3, 1, Fraction(8)) == 0
+        assert _v_cmp(2, 1, 3, 1, Fraction(9)) < 0
 
-    @pytest.mark.skipif(
-        sys.version_info < (3, 12),
-        reason="Python 3.10/3.11 raises TypeError instead of returning NotImplemented from Fraction.__pow__",
-    )
-    def test_rpow_fraction(self):
-        result = Fraction(1, 2) ** Pi()
-        expected = math.exp(-math.pi * math.log(2))
-        assert abs(float(result) - expected) < 1e-8
+    def test_floor_at_corner_positive_and_negative_coefficients(self):
+        # v = 8.  The identity transform has floor 8, while 9 is too high.
+        assert _floor_at_corner(1, 0, 0, 1, 2, 1, 3, 1, 8)
+        assert not _floor_at_corner(1, 0, 0, 1, 2, 1, 3, 1, 9)
 
-    def test_rpow_nonpositive_raises(self):
+        # 1 / v = 1/8 has floor 0; this exercises the coeff < 0 branch.
+        assert _floor_at_corner(0, 1, 1, 0, 2, 1, 3, 1, 0)
+
+
+class TestPowImplementations:
+    def test_pow_int_exponent_direct(self):
+        assert PowIntExponent(Fraction(2, 3), -2) == CF.from_rational(Fraction(9, 4))
+
+    def test_pow_int_exponent_rejects_non_integer_exponent(self):
         with pytest.raises(ValueError):
-            0 ** Pi()
+            PowIntExponent(2, Fraction(1, 2))
 
-    def test_integer_pow_unchanged(self):
-        result = Sqrt(2) ** 2
-        assert result.to_fraction() == 2
+    def test_pow_cf_direct(self):
+        val = float(convergent(PowCF(2, Fraction(3, 2)).take(20), 19))
+        assert abs(val - 2**1.5) < 1e-8
 
+    def test_pow_mp_direct(self):
+        val = float(convergent(PowMP(2, Fraction(3, 2)).take(20), 19))
+        assert abs(val - 2**1.5) < 1e-8
 
-class TestBracketFloor:
-    def test_normal_polynomial(self):
-        # y^2 - 2 = 0, root = sqrt(2) ≈ 1.414
-        assert _bracket_floor([-1, 0, 2]) == 1
+    def test_pow_interval_direct_rejects_general_rationals(self):
+        with pytest.raises(ValueError):
+            PowInterval(2, Fraction(3, 2))
 
-    def test_degenerate_leading_zero(self):
-        # [0, 1] is degenerate (represents 1/0 = ∞)
-        assert _bracket_floor([0, 1]) is None
+    def test_pow_interval_direct_cf_base(self):
+        from cfmath import Pi
 
-    def test_exact_integer_root(self):
-        # y - 8 = 0, root = 8
-        assert _bracket_floor([1, -8]) == 8
-
-
-class TestInitBracketPoly:
-    def test_integer_base_degree1(self):
-        # (2/1)^(3/1): polynomial y - 8 = 0
-        assert _init_bracket_poly(2, 1, 3, 1) == [1, -8]
-
-    def test_integer_base_degree7(self):
-        # (2/1)^(22/7): polynomial y^7 - 2^22 = 0
-        poly = _init_bracket_poly(2, 1, 22, 7)
-        assert poly[0] == 1
-        assert poly[-1] == -(2**22)
-        assert len(poly) == 8
-        assert poly[1:-1] == [0] * 6
-
-    def test_fraction_base(self):
-        # (2/3)^(1/2): polynomial 3*y^2 - 2 = 0
-        assert _init_bracket_poly(2, 3, 1, 2) == [3, 0, -2]
+        val = float(convergent(PowInterval(Pi(), 2).take(20), 19))
+        assert abs(val - math.pi**2) < 1e-10
 
 
-class TestPowRationalCF:
-    def test_first_term_2_pi(self):
-        # floor(2^π) = floor(8.824...) = 8
-        gen = _pow_rational_cf_gen(2, 1, Pi())
-        assert next(gen) == 8
+class TestPowCF:
+    """Pow() with CF base or exponent."""
 
-    def test_first_few_terms_2_pi(self):
-        # 2^π CF = [8; 1, 4, 1, 2, ...] — verify exact terms, then convergent accuracy
-        result = CF([], _source=_pow_rational_cf_gen(2, 1, Pi()))
-        terms = list(result.take(5))
-        assert terms == [8, 1, 4, 1, 2]
-        val = float(convergent(result.take(5), 4))
-        assert abs(val - math.exp(math.pi * math.log(2))) < 2e-3
+    def test_finite_cf_base_reduces_to_exact(self):
+        # CF([4]) is finite → reduces to Fraction(4) → exact quadratic path
+        assert Pow(CF([4]), Fraction(1, 2)).terms == [2]
+        assert Pow(CF([9]), Fraction(1, 2)).terms == [3]
 
-    def test_agrees_with_numerical_for_small_base(self):
-        # 3^π: exact bracket terms should agree with numerical float value
-        result = CF([], _source=_pow_rational_cf_gen(3, 1, Pi()))
-        terms = list(result.take(4))
-        assert terms[0] == 31
-        val = float(convergent(result.take(4), 3))
-        assert abs(val - math.exp(math.pi * math.log(3))) < 2e-3
+    def test_finite_cf_exponent_reduces_to_exact(self):
+        # CF([3]) is finite → reduces to Fraction(3) → integer exponent path
+        assert Pow(2, CF([3])) == CF.from_int(8)
 
-    def test_degenerate_bracket_handled(self):
-        # 2^(3/1) = 8 exactly; the lower bracket degenerates after emitting 8,
-        # forcing a re-initialization — verify we still get the correct 2nd term
-        result = CF([], _source=_pow_rational_cf_gen(2, 1, Pi()))
-        terms = list(result.take(3))
-        assert terms[0] == 8  # floor(2^π)
-        assert terms[1] == 1  # next CF term of 2^π
+    def test_finite_cf_half_exponent_reduces_to_sqrt(self):
+        # CF([0, 2]) = 1/2 is finite → reduces to Fraction(1, 2) → exact Sqrt path
+        assert Pow(2, CF([0, 2])).terms == Sqrt(2).terms
 
-    def test_fraction_base(self):
-        # (3/2)^π ≈ 3.574..., CF = [3; 1, 1, 2, 1, 6, ...]
-        result = CF([], _source=_pow_rational_cf_gen(3, 2, Pi()))
-        terms = list(result.take(6))
-        assert terms[0] == 3
-        val = float(convergent(result.take(6), 5))
-        assert abs(val - math.exp(math.pi * math.log(1.5))) < 1e-4
+    def test_infinite_cf_base_integer_exponent_repeated_squaring(self):
+        # Pi**2 via repeated squaring, no log involved
+        from cfmath import Pi
 
+        pi = Pi()
+        result = Pow(pi, 2)
+        val = float(convergent(result.take(20), 19))
+        assert abs(val - math.pi**2) < 1e-10
 
-class TestLnCF:
-    def test_ln_sqrt2_equals_half_ln2(self):
-        ln_sqrt2 = Ln(Sqrt(2))
-        ln_2_half = Ln(2) * Fraction(1, 2)
-        v1 = float(convergent(ln_sqrt2.take(20), 19))
-        v2 = float(convergent(ln_2_half.take(20), 19))
-        assert abs(v1 - v2) < 1e-10
+    def test_infinite_cf_base_integer_exponent_negative(self):
+        from cfmath import Pi
 
-    def test_ln_pi_value(self):
-        val = float(convergent(Ln(Pi()).take(20), 19))
-        assert abs(val - math.log(math.pi)) < 1e-8
+        result = Pow(Pi(), -1)
+        val = float(convergent(result.take(20), 19))
+        assert abs(val - 1 / math.pi) < 1e-10
+
+    def test_infinite_cf_base_fraction_exponent(self):
+        # sqrt(Pi) via ExpCF/LnCF path
+        from cfmath import Pi
+
+        result = Pow(Pi(), Fraction(1, 2))
+        val = float(convergent(result.take(20), 19))
+        assert abs(val - math.sqrt(math.pi)) < 1e-8
+
+    def test_infinite_cf_base_cf_exponent(self):
+        # Pi ** (1/Pi): both infinite CFs
+        from cfmath import Pi
+
+        pi = Pi()
+        result = Pow(pi, 1 / Pi())
+        val = float(convergent(result.take(20), 19))
+        assert abs(val - math.pi ** (1 / math.pi)) < 1e-8
+
+    def test_pow_cf_base_matches_float(self):
+        from cfmath import Pi
+        from cfmath.constants import E
+
+        # e**Pi (Gelfond's constant)
+        result = Pow(E(), Pi())
+        val = float(convergent(result.take(20), 19))
+        assert abs(val - math.e**math.pi) < 1e-8

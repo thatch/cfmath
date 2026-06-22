@@ -22,8 +22,12 @@ setup: .venv
 
 .PHONY: test
 test:
-	python -m coverage run -m pytest $(TESTOPTS)
+	python -m coverage run -m pytest -k "not bench" $(TESTOPTS)
 	python -m coverage report
+
+.PHONY: bench
+bench:
+	python -m pytest -k bench $(TESTOPTS)
 
 .PHONY: format
 format:

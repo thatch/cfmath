@@ -5,8 +5,40 @@ from fractions import Fraction
 
 import pytest
 
-from cfmath import Cos, Sin, Tan, convergent
-from cfmath.trig import _cos_terms_mpmath, _sin_terms_mpmath, _tan_terms_mpmath
+from cfmath import Cos, Pi, Sin, Tan, convergent
+from cfmath.trig import (
+    TrigMode,
+    _cos_terms_mpmath,
+    _sin_terms_mpmath,
+    _tan_terms_mpmath,
+)
+from cfmath.trig import (
+    _CosCF as CosCF,
+)
+from cfmath.trig import (
+    _CosGCF as CosGCF,
+)
+from cfmath.trig import (
+    _CosMP as CosMP,
+)
+from cfmath.trig import (
+    _SinCF as SinCF,
+)
+from cfmath.trig import (
+    _SinGCF as SinGCF,
+)
+from cfmath.trig import (
+    _SinMP as SinMP,
+)
+from cfmath.trig import (
+    _TanCF as TanCF,
+)
+from cfmath.trig import (
+    _TanGCF as TanGCF,
+)
+from cfmath.trig import (
+    _TanMP as TanMP,
+)
 
 
 def _gcf_terms(fn, x: Fraction, n: int) -> list[int]:
@@ -44,6 +76,40 @@ class TestTan:
             mpm = _tan_terms_mpmath(x.numerator, x.denominator, 20)
             assert gcf == mpm, f"Tan({x}): GCF vs mpmath mismatch"
 
+    def test_tan_cf_matches_mpmath(self):
+        """Experimental meta-CF backend handles direct and π-reduced inputs."""
+        for x in (
+            Fraction(1, 4),
+            Fraction(1, 3),
+            Fraction(1, 2),
+            Fraction(1),
+            Fraction(3, 2),
+            Fraction(2),
+            Fraction(3),
+            Fraction(-1, 4),
+        ):
+            meta = list(TanCF(x).take(20))
+            mpm = _tan_terms_mpmath(x.numerator, x.denominator, 20)
+            assert meta == mpm, f"TanCF({x}) term mismatch"
+
+    def test_tan_cf_accepts_cf_input(self):
+        val = float(convergent(TanCF(Pi() + Fraction(1, 4)).take(20), 19))
+        assert abs(val - math.tan(0.25)) < 1e-8
+
+    def test_tan_dispatch_modes(self):
+        x = Fraction(1, 3)
+        assert Tan(x).take(12) == TanGCF(x).take(12)
+        assert Tan(x, TrigMode.GCF).take(12) == TanGCF(x).take(12)
+        assert Tan(x, TrigMode.CF).take(12) == TanCF(x).take(12)
+        assert Tan(x, TrigMode.MP).take(12) == TanMP(x).take(12)
+        assert Tan(x, "cf").take(12) == TanCF(x).take(12)
+
+    def test_tan_bad_mode_raises(self):
+        with pytest.raises(ValueError):
+            Tan(Fraction(1, 3), "bogus")
+        with pytest.raises(TypeError):
+            Tan(Fraction(1, 3), object())  # type: ignore[arg-type]
+
 
 class TestSin:
     def test_sin_zero(self):
@@ -74,6 +140,29 @@ class TestSin:
             gcf = _gcf_terms(Sin, x, 20)
             mpm = _sin_terms_mpmath(x.numerator, x.denominator, 20)
             assert gcf == mpm, f"Sin({x}): GCF vs mpmath mismatch"
+
+    def test_sin_cf_matches_mpmath(self):
+        """Experimental meta-CF backend handles direct and 2π-reduced inputs."""
+        for x in (
+            Fraction(1, 4),
+            Fraction(1, 3),
+            Fraction(1, 2),
+            Fraction(1),
+            Fraction(3, 2),
+            Fraction(2),
+            Fraction(3),
+            Fraction(-1, 3),
+        ):
+            meta = list(SinCF(x).take(20))
+            mpm = _sin_terms_mpmath(x.numerator, x.denominator, 20)
+            assert meta == mpm, f"SinCF({x}) term mismatch"
+
+    def test_sin_dispatch_modes(self):
+        x = Fraction(1, 3)
+        assert Sin(x).take(12) == SinGCF(x).take(12)
+        assert Sin(x, TrigMode.GCF).take(12) == SinGCF(x).take(12)
+        assert Sin(x, TrigMode.CF).take(12) == SinCF(x).take(12)
+        assert Sin(x, TrigMode.MP).take(12) == SinMP(x).take(12)
 
 
 class TestCos:
@@ -113,3 +202,26 @@ class TestCos:
             gcf = _gcf_terms(Cos, x, 20)
             mpm = _cos_terms_mpmath(x.numerator, x.denominator, 20)
             assert gcf == mpm, f"Cos({x}): GCF vs mpmath mismatch"
+
+    def test_cos_cf_matches_mpmath(self):
+        """Experimental meta-CF backend handles direct and 2π-reduced inputs."""
+        for x in (
+            Fraction(1, 4),
+            Fraction(1, 3),
+            Fraction(1, 2),
+            Fraction(1),
+            Fraction(3, 2),
+            Fraction(2),
+            Fraction(3),
+            Fraction(-1, 3),
+        ):
+            meta = list(CosCF(x).take(20))
+            mpm = _cos_terms_mpmath(x.numerator, x.denominator, 20)
+            assert meta == mpm, f"CosCF({x}) term mismatch"
+
+    def test_cos_dispatch_modes(self):
+        x = Fraction(1, 3)
+        assert Cos(x).take(12) == CosGCF(x).take(12)
+        assert Cos(x, TrigMode.GCF).take(12) == CosGCF(x).take(12)
+        assert Cos(x, TrigMode.CF).take(12) == CosCF(x).take(12)
+        assert Cos(x, TrigMode.MP).take(12) == CosMP(x).take(12)

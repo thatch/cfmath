@@ -1,11 +1,12 @@
 """Shared infrastructure for cfmath implementations.
 
 Provides:
-  _HAS_MPMATH       — True if mpmath is importable
-  _lazy_cf(fn)      — wrap a batch-compute function into a lazy CF
-  _extract_cf_terms — extract CF terms from an mpmath value until precision runs out
-  _mpmath_cf(fn)    — precision-automatic lazy CF from an mpmath value function
-  _coerce_trig_arg  — validate and coerce int/Fraction inputs
+  _HAS_MPMATH            — True if mpmath is importable
+  _lazy_cf(fn)           — wrap a batch-compute function into a lazy CF
+  _extract_cf_terms      — extract CF terms from an mpmath value until precision runs out
+  _mpmath_cf(fn)         — precision-automatic lazy CF from an mpmath value function
+  _mpmath_cf_for_cf_arg  — apply an mpmath function to a CF argument via convergent approx
+  _coerce_trig_arg       — validate and coerce int/Fraction inputs
 """
 
 from __future__ import annotations
@@ -169,6 +170,84 @@ def _mpmath_cf(
     if debug_source is not None:
         cf._debug_source = debug_source
     return cf
+
+
+def _cf_terms_from_interval_approximator(
+    interval_at_precision: Callable[[int], tuple[Fraction, Fraction]],
+    n_terms: int,
+    initial: int = 16,
+    max_precision: int = 1 << 16,
+) -> list[int]:
+    """Return CF terms once rational intervals prove them.
+
+    The caller supplies ``interval_at_precision(p)``, which must return
+    rational bounds ``lo <= x <= hi``.  This helper extracts simple-CF terms
+    only while both endpoints force the same next integer.  If the interval
+    straddles an integer boundary or zero after subtracting a term, the helper
+    doubles precision and starts over.
+    """
+    precision = initial
+    while precision <= max_precision:
+        lo, hi = interval_at_precision(precision)
+        if lo > hi:
+            lo, hi = hi, lo
+
+        terms: list[int] = []
+        while len(terms) < n_terms:
+            if lo == hi:
+                terms.extend(CF.from_rational(lo).terms)
+                return terms[:n_terms]
+
+            a_lo = lo.numerator // lo.denominator
+            a_hi = hi.numerator // hi.denominator
+            if a_lo != a_hi:
+                break
+
+            a = a_lo
+            terms.append(a)
+            lo -= a
+            hi -= a
+
+            if lo == hi == 0:
+                return terms
+            if lo <= 0 <= hi:
+                break
+
+            lo, hi = Fraction(1, hi), Fraction(1, lo)
+            if lo > hi:
+                lo, hi = hi, lo
+
+        if len(terms) >= n_terms:
+            return terms[:n_terms]
+        precision *= 2
+
+    raise ValueError(f"could not pin {n_terms} CF terms by precision {max_precision}")
+
+
+def _mpmath_cf_for_cf_arg(x: CF, fn: Callable[[Any], Any]) -> CF:
+    """Return CF for fn(x) where x is a CF, using dual-precision verification.
+
+    Approximates x by a convergent deep enough that the rational-approximation
+    error is negligible relative to the mpmath working precision, then emits CF
+    terms via _mpmath_cf's agree-at-two-levels protocol.
+
+    fn must accept a single mpmath.mpf and return an mpmath value (e.g.
+    mpmath.sin, mpmath.cosh, mpmath.atan).
+    """
+    import mpmath
+
+    from .convergents import convergent
+
+    def _value_fn() -> Any:
+        dps = mpmath.mp.dps
+        depth = max(5 * dps, 60)
+        try:
+            approx = convergent(x, depth)
+        except IndexError:
+            approx = x.to_fraction()
+        return fn(mpmath.mpf(approx.numerator) / mpmath.mpf(approx.denominator))
+
+    return _mpmath_cf(_value_fn)
 
 
 def _coerce_trig_arg(x: int | Fraction) -> Fraction:

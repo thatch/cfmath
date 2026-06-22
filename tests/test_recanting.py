@@ -33,6 +33,9 @@ from cfmath.convergents import convergent
 # ---------------------------------------------------------------------------
 
 _PI_FLOAT = math.pi
+# Pi's simple continued-fraction coefficients begin 3, 7, 15, 1, 292, ...
+# See OEIS A001203.
+_PI_PREFIX_110 = tuple(Pi().take(110))
 
 
 def _pi_with_corruptions(corruptions: dict[int, int], n_cached: int = 110) -> CF:
@@ -44,8 +47,9 @@ def _pi_with_corruptions(corruptions: dict[int, int], n_cached: int = 110) -> CF
     wrong terms before a recant that never arrived, without mutating the
     cached Pi singleton itself.
     """
-    prefix = list(Pi().take(n_cached))
-    pi = CF.from_terms(prefix)
+    if n_cached > len(_PI_PREFIX_110):
+        raise ValueError(f"requested {n_cached} cached terms but only {len(_PI_PREFIX_110)} are available")
+    pi = CF(list(_PI_PREFIX_110[:n_cached]))
     for pos, val in corruptions.items():
         pi._cache[pos] = val
     return pi

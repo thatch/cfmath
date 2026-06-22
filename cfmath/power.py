@@ -2,12 +2,32 @@
 
 from __future__ import annotations
 
+import math as _math
+from enum import Enum
 from fractions import Fraction
-from math import gcd
-from typing import Iterator
+from typing import Any, Iterator
 
-from ._backend import _annotate_cf
+from ._backend import _HAS_MPMATH, _annotate_cf, _lazy_cf
+from ._poly import content as _poly_content
 from .core import CF
+
+PowArg = int | Fraction | CF
+
+# Max input terms consumed per output term before the interval pow engine gives
+# up and stops emitting.  The meta-CF engine in gosper.py has its own, smaller
+# stall caps for a different algorithm; this path needs a generous bound because
+# a legitimate large partial quotient can take many input refinements to pin.
+_MAX_STALL = 1000
+
+
+class PowMode(Enum):
+    """Select the implementation used by ``Pow``."""
+
+    AUTO = "auto"
+    INT = "int"
+    CF = "cf"
+    MP = "mp"
+    INTERVAL = "interval"
 
 
 def _integer_kth_root(n: int, k: int) -> int:
@@ -61,10 +81,13 @@ def _horner_update(coeffs: list[int], a: int) -> list[int]:
 
 
 def _reduce_coeffs(coeffs: list[int]) -> list[int]:
-    """Divide all coefficients by their GCD to keep magnitudes small."""
-    g = 0
-    for c in coeffs:
-        g = gcd(g, abs(c))
+    """Divide all coefficients by their GCD to keep magnitudes small.
+
+    The Nthroot engine stores coefficients in descending degree, but the content
+    is just the GCD of the integers, so the order does not matter.  Skip the
+    rebuild when the GCD is already 1 — the common case once content is stripped.
+    """
+    g = _poly_content(coeffs)
     return [c // g for c in coeffs] if g > 1 else coeffs
 
 
@@ -193,167 +216,488 @@ def Cuberoot(n: int) -> CF:
     return _annotate_cf(Nthroot(n, 3), ("Cuberoot", n))
 
 
-def _init_bracket_poly(a: int, b: int, p: int, q: int) -> list[int]:
-    """Initial polynomial  b^p * y^q - a^p = 0  whose root is (a/b)^(p/q)."""
-    return [b**p] + [0] * (q - 1) + [-(a**p)]
+def _cf_interval(cf: CF, k: int) -> tuple[Fraction, Fraction]:
+    """Rational bounds [lo, hi] known to bracket cf after k convergent terms."""
+    return cf.interval(k)
 
 
-def _bracket_floor(coeffs: list[int]) -> int | None:
-    """Floor of the unique root > 1, or None if the polynomial has degenerated.
+def _v_cmp(px: int, qx: int, py: int, qy: int, t: Fraction) -> int:
+    """Sign of v - t where v = (px/qx)^(py/qy).
 
-    Degeneracy occurs when a bracket is an exact rational power whose CF has
-    been exhausted — e.g. 2^(3/1) = 8 exactly, so after emitting the term 8
-    the tail polynomial becomes [0, 1] (representing 1/0 = ∞).
+    Returns negative, zero, or positive. Requires px >= 0, qx > 0, py >= 0, qy > 0.
+    Python's Fraction invariant ensures t.denominator > 0.
     """
-    return None if coeffs[0] == 0 else _floor_by_sign(coeffs)
+    tn, td = t.numerator, t.denominator
+    if tn < 0:
+        return 1  # v >= 0 > t
+    if tn == 0:
+        # v = 0 iff px == 0 and py > 0; otherwise v > 0
+        return 0 if (px == 0 and py > 0) else 1
+    # tn > 0, td > 0: compare (px/qx)^py with (tn/td)^qy
+    lhs = px**py * td**qy
+    rhs = tn**qy * qx**py
+    return -1 if lhs < rhs else (0 if lhs == rhs else 1)
 
 
-# Bracket polynomials for α = π require degree ~33000 at the 5th convergent
-# (103993/33102), with coefficients like 2^103993 (~31000 digits).  Beyond this
-# threshold the per-step cost becomes prohibitive; fall through to exp/ln.
-_MAX_BRACKET_DEGREE = 500
+def _floor_at_corner(
+    a: int,
+    b: int,
+    c: int,
+    d: int,
+    px: int,
+    qx: int,
+    py: int,
+    qy: int,
+    n: int,
+) -> bool:
+    """Check floor((a·v+b)/(c·v+d)) == n at v = (px/qx)^(py/qy).
 
-
-def _pow_rational_cf_gen(a: int, b: int, cf_exp: CF) -> Iterator[int]:
-    """Yield exact CF terms of (a/b)^α where α is a CF.
-
-    Maintains two polynomial bracket states evolving in parallel:
-      poly_even  for  x^(p_{2k}/q_{2k})    even convergent of α, approaches from below
-      poly_odd   for  x^(p_{2k+1}/q_{2k+1}) odd convergent of α, approaches from above
-
-    Each bracket polynomial starts as  b^p * y^q - a^p = 0  (root = x^(p/q)).
-    For x = a/b > 1, even convergents give x^(p/q) < x^α and odd give x^(p/q) > x^α,
-    so the bracket brackets x^α from both sides.
-
-    Emit: when both brackets agree on the floor, that integer is the next CF term.
-    Ingest: when they disagree (or one bracket degenerates to a degenerate polynomial
-    after an exact rational power is exhausted), pull the next pair of α-convergents
-    and re-initialize both bracket polynomials.
-
-    Re-initializing advances the new polynomial past all already-emitted output
-    terms.  Two strategies are provided below; replay is the one currently implemented.
-
-    TODO (replay — current): Apply _horner_update(poly, t) for each stored emitted
-    term t.  Cost O(n * q) per re-initialization where n = number of emitted terms
-    and q = degree of the new polynomial.  Requires storing the full emitted list.
-
-    TODO (compose — future): Maintain the accumulated Möbius transform [p,q,r,s]
-    encoding the substitution y = (p*z + q)/(r*z + s) built from the emitted terms.
-    Substitute it into the new degree-q polynomial in one O(q^2) operation instead
-    of n separate O(q) steps.  Avoids storing the emitted list and has better
-    asymptotic cost per re-initialization.
-
-    PRACTICAL LIMIT: α-convergents with large denominators create polynomials of
-    very high degree with astronomically large coefficients (for α = π the 5th
-    convergent has degree ~33000 and coefficients ~2^103993).  This generator stops
-    and returns once convergents exceed _MAX_BRACKET_DEGREE; the caller should fall
-    back to the numerical path for any remaining terms.
-
-    Assumes  x = a/b > 1  (a > b > 0)  and  α > 0.
+    Uses pure integer arithmetic. Assumes c·v+d > 0 (valid CF Möbius state).
     """
-    from .convergents import convergent_pairs
 
-    conv_iter = convergent_pairs(cf_exp)
+    def sat(rhs: int, coeff: int, strict: bool) -> bool:
+        """Check coeff·v >= rhs, or < rhs when strict=True."""
+        if coeff == 0:
+            return (rhs > 0) if strict else (rhs <= 0)
+        t = Fraction(rhs, coeff)  # Python normalizes sign so denominator > 0
+        cv = _v_cmp(px, qx, py, qy, t)
+        if coeff > 0:
+            return (cv < 0) if strict else (cv >= 0)
+        # coeff < 0: dividing flips the inequality direction
+        return (cv > 0) if strict else (cv <= 0)
 
-    # Seed with first two convergents of α (even = below, odd = above)
-    try:
-        p_even, q_even = next(conv_iter)
-        p_odd, q_odd = next(conv_iter)
-    except StopIteration:
+    # n ≤ (a·v+b)/(c·v+d):  (a − n·c)·v ≥ n·d − b
+    if not sat(n * d - b, a - n * c, strict=False):
+        return False
+    # (a·v+b)/(c·v+d) < n+1:  (a − (n+1)·c)·v < (n+1)·d − b
+    return sat((n + 1) * d - b, a - (n + 1) * c, strict=True)
+
+
+def _pow_cf_terms(x: CF, y: CF) -> Iterator[int]:
+    """Yield CF terms for x^y via rational convergent interval arithmetic.
+
+    Maintains a Möbius state (a,b,c,d) tracking emitted terms, and tightens
+    rational bounds on x and y until all four interval corners agree on the
+    next CF term.
+
+    Convergents are tracked incrementally as integer pairs (p_k, q_k) to
+    avoid creating Fraction objects in the refinement loop.  For the k-th
+    convergent of a CF [a_0; a_1, ...]:
+
+        p_{-1}=1, q_{-1}=0
+        p_k = a_k * p_{k-1} + p_{k-2}
+        q_k = a_k * q_{k-1} + q_{k-2}
+
+    The perturbed convergent (CF with last term incremented) is
+    (p_k + p_{k-1}, q_k + q_{k-1}).  For even k, swap lo/hi to keep lo < hi.
+
+    When the float corners all share the same floor by a comfortable margin,
+    that floor is emitted directly.  Near an integer boundary (and only when
+    the convergent numerators are small), integer arithmetic verifies the
+    floor exactly.
+    """
+    a, b, c, d = 1, 0, 0, 1
+
+    # Convergent state: xp[k+1] = p_k, xq[k+1] = q_k with p_{-1}=1, q_{-1}=0
+    x_iter = iter(x)
+    xp: list[int] = [1]  # xp[0] = p_{-1} = 1
+    xq: list[int] = [0]  # xq[0] = q_{-1} = 0
+    xi = 0  # current depth; xp[-1]/xq[-1] = p_{xi-1}/q_{xi-1}
+
+    y_iter = iter(y)
+    yp: list[int] = [1]
+    yq: list[int] = [0]
+    yi = 0
+    y_exact: tuple[int, int] | None = None  # set when y is finite and fully known
+
+    def grow_x() -> bool:
+        nonlocal xi
+        try:
+            t = next(x_iter)
+        except StopIteration:
+            return False
+        xp.append(t * xp[-1] + (xp[-2] if len(xp) >= 2 else 0))
+        xq.append(t * xq[-1] + (xq[-2] if len(xq) >= 2 else 1))
+        xi += 1
+        return True
+
+    def grow_y() -> bool:
+        nonlocal yi, y_exact
+        if y_exact is not None:
+            return True  # y already pinned; only x needs refining
+        try:
+            t = next(y_iter)
+        except StopIteration:
+            # y is a finite CF; the last convergent is the exact rational value
+            y_exact = (yp[-1], yq[-1])
+            return True
+        yp.append(t * yp[-1] + (yp[-2] if len(yp) >= 2 else 0))
+        yq.append(t * yq[-1] + (yq[-2] if len(yq) >= 2 else 1))
+        yi += 1
+        return True
+
+    def xy_corners() -> list[tuple[int, int, int, int]]:
+        """Four (px, qx, py, qy) integer corners for the current intervals."""
+        # x interval
+        pxc, qxc = xp[-1], xq[-1]
+        pxp, qxp = pxc + xp[-2], qxc + xq[-2]
+        if not (xi & 1):
+            pxc, qxc, pxp, qxp = pxp, qxp, pxc, qxc
+        # y interval — point when y is a fully-consumed finite CF
+        if y_exact is not None:
+            pyc, qyc = y_exact
+            pyp, qyp = pyc, qyc
+        else:
+            pyc, qyc = yp[-1], yq[-1]
+            pyp, qyp = pyc + yp[-2], qyc + yq[-2]
+            if not (yi & 1):
+                pyc, qyc, pyp, qyp = pyp, qyp, pyc, qyc
+        return [
+            (pxc, qxc, pyc, qyc),
+            (pxc, qxc, pyp, qyp),
+            (pxp, qxp, pyc, qyc),
+            (pxp, qxp, pyp, qyp),
+        ]
+
+    # Initialise both to depth 1
+    if not grow_x() or not grow_y():
         return
 
-    if q_even > _MAX_BRACKET_DEGREE or q_odd > _MAX_BRACKET_DEGREE:
-        return
-
-    poly_even = _init_bracket_poly(a, b, p_even, q_even)
-    poly_odd = _init_bracket_poly(a, b, p_odd, q_odd)
-
-    # Stored emitted terms used for replay when re-initializing bracket polynomials.
-    # TODO (compose): replace with accumulated Möbius transform [p, q, r, s].
-    emitted: list[int] = []
+    stall = 0
 
     while True:
-        f_even = _bracket_floor(poly_even)
-        f_odd = _bracket_floor(poly_odd)
+        corners = xy_corners()
 
-        if f_even is not None and f_even == f_odd:
-            # Brackets agree: emit the shared floor as the next CF term
-            c = f_even
-            yield c
-            emitted.append(c)
-            poly_even = _reduce_coeffs(_horner_update(poly_even, c))
-            poly_odd = _reduce_coeffs(_horner_update(poly_odd, c))
+        # Float estimate of the homographic transform at each corner.
+        # No Fraction objects are created here — just plain int / int → float.
+        # When state magnitudes are large and both numerator/denominator
+        # undergo catastrophic cancellation, fall back to mpmath for that corner.
+        fvals: list[float] = []
+        bad = False
+        for px, qx, py, qy in corners:
+            v = (px / qx) ** (py / qy)
+            if _math.isnan(v):
+                bad = True
+                break
+            num = a * v + b
+            denom = c * v + d
+            if _math.isnan(denom):
+                bad = True
+                break
+            # Detect catastrophic cancellation: result is tiny vs. individual terms.
+            # Check this BEFORE the denom==0 bail-out: float gives denom==0.0 when
+            # state magnitudes are large and the true denominator is sub-ULP.
+            max_term = max(abs(a) * abs(v), abs(b), abs(c) * abs(v), abs(d))
+            min_result = min(abs(num), abs(denom))
+            if max_term > 1e6 and (denom == 0.0 or min_result < 1e-5 * max_term):
+                # Use mpmath to recover precision lost to cancellation.
+                # When denom==0.0 the float has no bits left; estimate cancellation
+                # from state magnitude alone.
+                try:
+                    import mpmath as _mpmath
+
+                    if min_result > 0:
+                        cancel = int(-_math.log10(min_result / max_term)) + 20
+                    else:
+                        cancel = int(_math.log10(max_term)) + 30
+                    dps = max(30, min(cancel, 150))
+                    with _mpmath.workdps(dps):
+                        vmp = (_mpmath.mpf(px) / _mpmath.mpf(qx)) ** (_mpmath.mpf(py) / _mpmath.mpf(qy))
+                        d_mp = c * vmp + d
+                        if not _mpmath.isfinite(d_mp):
+                            bad = True
+                            break
+                        fvals.append(float((a * vmp + b) / d_mp))
+                except ImportError:
+                    if denom == 0.0:
+                        bad = True
+                        break
+                    fvals.append(num / denom)
+            elif denom == 0.0:
+                bad = True
+                break
+            else:
+                fvals.append(num / denom)
+
+        if not bad and all(_math.isfinite(f) for f in fvals):
+            n_lo = int(_math.floor(min(fvals)))
+            n_hi = int(_math.floor(max(fvals)))
+
+            if n_lo == n_hi:
+                n = n_lo
+                low_margin = min(f - n for f in fvals)
+                hi_margin = min(n + 1 - f for f in fvals)
+                boundary_margin = min(low_margin, hi_margin)
+
+                if boundary_margin > 1e-7:
+                    # All corners solidly inside [n, n+1); float is reliable.
+                    yield n
+                    a, b, c, d = c, d, a - n * c, b - n * d
+                    stall = 0
+                    continue
+
+                # Close to an integer boundary.  Use integer verification
+                # when the convergent exponents are small enough.
+                py_max = max(py for _, _, py, _ in corners)
+                qy_max = max(qy for _, _, _, qy in corners)
+                if py_max < 2000 and qy_max < 2000:
+                    if all(_floor_at_corner(a, b, c, d, px, qx, py, qy, n) for px, qx, py, qy in corners):
+                        yield n
+                        a, b, c, d = c, d, a - n * c, b - n * d
+                        stall = 0
+                        continue
+                else:
+                    # Deep convergents imply very high precision; trust float.
+                    yield n
+                    a, b, c, d = c, d, a - n * c, b - n * d
+                    stall = 0
+                    continue
+
+        stall += 1
+        if stall >= _MAX_STALL:
+            return
+
+        # Spread heuristic: refine whichever input contributes more spread.
+        if bad or not all(_math.isfinite(f) for f in fvals):
+            if not grow_x():
+                return
         else:
-            # Brackets degenerate or disagree: tighten by pulling the next pair
-            # of α-convergents and replaying all emitted terms onto each new poly.
-            try:
-                p_even, q_even = next(conv_iter)
-                p_odd, q_odd = next(conv_iter)
-            except StopIteration:
-                return  # α is finite; no more convergents
-
-            if q_even > _MAX_BRACKET_DEGREE or q_odd > _MAX_BRACKET_DEGREE:
-                return  # coefficient blowup territory; stop exact computation
-
-            # TODO (replay): O(n * q) replay — replace with compose for O(q^2)
-            poly_even = _init_bracket_poly(a, b, p_even, q_even)
-            for t in emitted:
-                poly_even = _reduce_coeffs(_horner_update(poly_even, t))
-
-            poly_odd = _init_bracket_poly(a, b, p_odd, q_odd)
-            for t in emitted:
-                poly_odd = _reduce_coeffs(_horner_update(poly_odd, t))
+            # corners order: (xl,yl) (xl,yh) (xh,yl) (xh,yh)
+            x_spread = max(abs(fvals[2] - fvals[0]), abs(fvals[3] - fvals[1]))
+            y_spread = max(abs(fvals[1] - fvals[0]), abs(fvals[3] - fvals[2]))
+            if x_spread >= y_spread:
+                if not grow_x():
+                    return
+            else:
+                if not grow_y():
+                    return
 
 
-def Pow(x: int | Fraction, r: int | Fraction | CF) -> CF:
-    """x raised to the power r, as a continued fraction.
+def cf_pow(x: CF, y: CF) -> CF:
+    """Return x^y as a continued fraction, computed via convergent interval arithmetic.
 
-    x may be a positive int or Fraction; r may be an int, Fraction, or CF.
-
-    - r integer:          exact rational arithmetic
-    - r Fraction p/q:     compute x^p exactly (Fraction), then Nthroot(x^p, q)
-    - r CF:               bracket polynomial approach up to _MAX_BRACKET_DEGREE,
-                          then Exp(r * Ln(x)) for remaining terms
-
-    Examples::
-
-        Pow(4, Fraction(1, 2))              # [2] — exact square root
-        Pow(2, Fraction(3, 2))              # 2√2 ≈ [2; 1, 3, 1, 5, ...]
-        Pow(Fraction(1, 8), Fraction(1, 3)) # 1/2 = [0; 2] — exact cube root
-        Pow(2, -3)                          # [0; 8] = 1/8
-        Pow(2, Pi())                        # 2^π ≈ [8; 1, 4, 1, ...]
+    Both x and y must be positive infinite CFs.  For finite CFs or rational
+    inputs, use ``Pow``, which dispatches to exact paths before falling through
+    to this function.
     """
+    return CF([], _source=_pow_cf_terms(x, y))
+
+
+def _coerce_pow_args(x: PowArg, r: PowArg) -> tuple[Fraction | CF, Fraction | CF]:
+    """Coerce finite inputs once so every power implementation sees the same domain."""
+    if isinstance(x, CF) and x.is_finite():
+        x = x.to_fraction()
+    if isinstance(r, CF) and r.is_finite():
+        r = r.to_fraction()
+
     if isinstance(x, int):
         x = Fraction(x)
-    elif not isinstance(x, Fraction):
-        raise TypeError(f"Pow() base expects int or Fraction, got {type(x).__name__}")
-    if x <= 0:
-        raise ValueError(f"Pow() base must be positive, got {x}")
-
-    if isinstance(r, CF):
-        from .exponential import Exp
-        from .logarithm import Ln
-
-        # _pow_rational_cf_gen yields exact terms via the bracket polynomial approach
-        # until α's convergents exceed _MAX_BRACKET_DEGREE (coefficient blowup).
-        # Exp(r * Ln(x)) covers the full range numerically.
-        # TODO: once the compose strategy is implemented (eliminating blowup), replace
-        # the Exp path entirely with _pow_rational_cf_gen.
-        return _annotate_cf(Exp(r * Ln(x)), ("Pow", x, r))
+    elif not isinstance(x, (Fraction, CF)):
+        raise TypeError(f"Pow() base expects int, Fraction, or CF, got {type(x).__name__}")
 
     if isinstance(r, int):
         r = Fraction(r)
-    elif not isinstance(r, Fraction):
+    elif not isinstance(r, (Fraction, CF)):
         raise TypeError(f"Pow() exponent expects int, Fraction, or CF, got {type(r).__name__}")
 
-    if x == 1 or r == 0:
-        return _annotate_cf(CF.from_int(1), ("Pow", x, r))
-    if r == 1:
-        return _annotate_cf(CF.from_rational(x), ("Pow", x, r))
+    if isinstance(x, Fraction) and x <= 0:
+        raise ValueError(f"Pow() base must be positive, got {x}")
 
-    # Integer exponent: exact rational
+    return x, r
+
+
+def _as_cf(x: Fraction | CF) -> CF:
+    """Return x as a CF without changing infinite CF inputs."""
+    return x if isinstance(x, CF) else CF.from_rational(x)
+
+
+def _pow_trivial(x: Fraction | CF, r: Fraction | CF) -> CF | None:
+    """Return exact identity cases that every implementation shares."""
+    if isinstance(r, Fraction) and r == 0:
+        return CF.from_int(1)
+    if isinstance(x, Fraction) and x == 1:
+        return CF.from_int(1)
+    if isinstance(r, Fraction) and r == 1:
+        return _as_cf(x)
+    return None
+
+
+def PowIntExponent(x: PowArg, r: PowArg) -> CF:
+    """Raise x to an integer exponent.
+
+    This path is exact.  It accepts a CF base, but the exponent must be an
+    integer after finite-CF reduction.  A CF base uses CF repeated squaring.
+    """
+    x, r = _coerce_pow_args(x, r)
+    if not isinstance(r, Fraction) or r.denominator != 1:
+        raise ValueError("PowIntExponent requires an integer exponent")
+    if isinstance(x, Fraction):
+        return CF.from_rational(x**r.numerator)
+    return x**r.numerator
+
+
+def _pow_rational_special(x: Fraction | CF, r: Fraction | CF) -> CF | None:
+    """Return exact rational-base shortcuts, or None when no shortcut applies."""
+    if not isinstance(x, Fraction) or not isinstance(r, Fraction):
+        return None
+
     if r.denominator == 1:
-        return _annotate_cf(CF.from_rational(x**r.numerator), ("Pow", x, r))
+        return PowIntExponent(x, r)
 
-    # Rational exponent p/q: compute x^p exactly, then take q-th root
-    return _annotate_cf(Nthroot(x**r.numerator, r.denominator), ("Pow", x, r))
+    # Any rational exponent p/q on a rational base can be rewritten as
+    # (x^p)^(1/q), which stays exact and usually beats the generic CF path.
+    return Nthroot(x**r.numerator, r.denominator)
+
+
+def PowCF(x: PowArg, r: PowArg) -> CF:
+    """Raise x to r using CF logarithm and exponential implementations.
+
+    The calculation is ``ExpCF(r * LnCF(x))`` after shared coercion and trivial
+    identity handling.  It is slower than exact integer/radical paths, but it
+    works for finite rationals and non-finite CF inputs with one comparable
+    mechanism.
+    """
+    x, r = _coerce_pow_args(x, r)
+    trivial = _pow_trivial(x, r)
+    if trivial is not None:
+        return trivial
+    special = _pow_rational_special(x, r)
+    if special is not None:
+        return special
+
+    from .exponential import ExpCF
+    from .logarithm import LnCF
+
+    return ExpCF(_as_cf(r) * LnCF(_as_cf(x)))
+
+
+def PowMP(x: PowArg, r: PowArg) -> CF:
+    """Raise x to r using mpmath numeric evaluation.
+
+    This path exists for comparison.  It approximates CF inputs by convergents
+    at the requested output depth, then extracts CF terms from the mpmath value.
+    """
+    if not _HAS_MPMATH:
+        raise RuntimeError("PowMP requires mpmath")
+
+    x, r = _coerce_pow_args(x, r)
+    trivial = _pow_trivial(x, r)
+    if trivial is not None:
+        return trivial
+    special = _pow_rational_special(x, r)
+    if special is not None:
+        return special
+
+    def _compute(n_terms: int) -> list[int]:
+        import mpmath
+
+        from .convergents import convergent as _convergent
+
+        mpmath.mp.dps = n_terms * 5 + 80
+        depth = n_terms * 2 + 20
+
+        def mp_arg(v: Fraction | CF) -> Any:
+            if isinstance(v, Fraction):
+                return mpmath.mpf(v.numerator) / mpmath.mpf(v.denominator)
+            q = _convergent(v, depth)
+            return mpmath.mpf(q.numerator) / mpmath.mpf(q.denominator)
+
+        val = mpmath.power(mp_arg(x), mp_arg(r))
+        terms: list[int] = []
+        for _ in range(n_terms):
+            a = int(mpmath.floor(val))
+            terms.append(a)
+            frac = val - a
+            if frac == 0:
+                break
+            val = 1 / frac
+        return terms
+
+    return _lazy_cf(_compute)
+
+
+def PowInterval(x: PowArg, r: PowArg) -> CF:
+    """Raise x to r using convergent interval arithmetic.
+
+    This exposes the interval engine for comparison.  It handles exact identity
+    and integer-exponent cases first.  For general finite-rational powers use
+    ``PowCF`` or ``PowMP``; the raw interval engine needs live CF uncertainty to
+    refine.
+    """
+    x, r = _coerce_pow_args(x, r)
+    trivial = _pow_trivial(x, r)
+    if trivial is not None:
+        return trivial
+    if isinstance(r, Fraction) and r.denominator == 1:
+        return PowIntExponent(x, r)
+    if isinstance(x, Fraction) and isinstance(r, Fraction):
+        raise ValueError("PowInterval needs a non-finite CF input for non-integer powers")
+
+    return cf_pow(_as_cf(x), _as_cf(r))
+
+
+def _coerce_pow_mode(mode: PowMode | str | None) -> PowMode:
+    """Return a PowMode, accepting strings as a compatibility convenience."""
+    if mode is None:
+        return PowMode.AUTO
+    if isinstance(mode, PowMode):
+        return mode
+    if isinstance(mode, str):
+        try:
+            return PowMode(mode)
+        except ValueError as exc:
+            raise ValueError(f"unknown Pow mode {mode!r}") from exc
+    raise TypeError(f"Pow mode expects PowMode, str, or None, got {type(mode).__name__}")
+
+
+def Pow(x: PowArg, r: PowArg, mode: PowMode | str | None = None) -> CF:
+    """x raised to the power r, as a continued fraction.
+
+    x may be a positive int, Fraction, or CF; r may be an int, Fraction, or CF.
+
+    ``mode`` selects the implementation:
+    - ``None`` or ``PowMode.AUTO``: exact shortcuts, then interval for non-finite CFs,
+      else ``PowCF``
+    - ``PowMode.INT``: exact integer exponent path
+    - ``PowMode.CF``: ``ExpCF(r * LnCF(x))``
+    - ``PowMode.MP``: mpmath evaluation
+    - ``PowMode.INTERVAL``: convergent interval arithmetic
+
+    Special cases (exact or faster paths):
+    - r is an integer: exact rational arithmetic, or CF repeated squaring
+    - x is a positive integer and r = 1/2: uses Sqrt
+    - x is a positive integer and r = 1/3: uses Cuberoot
+    - general: ExpCF(r * LnCF(x))
+
+    Examples::
+
+        Pow(4, Fraction(1, 2))  # [2] — exact via Sqrt
+        Pow(2, Fraction(3, 2))  # 2√2 ≈ [2; 1, 3, 1, 5, ...]
+        Pow(2, -3)              # [0; 8] = 1/8
+        Pow(Fraction(2, 3), 2)  # [0; 2, 3, 1, ...] = 4/9
+    """
+    mode = _coerce_pow_mode(mode)
+    if mode is PowMode.AUTO:
+        x_coerced, r_coerced = _coerce_pow_args(x, r)
+        trivial = _pow_trivial(x_coerced, r_coerced)
+        if trivial is not None:
+            result = trivial
+        else:
+            special = _pow_rational_special(x_coerced, r_coerced)
+            if special is not None:
+                result = special
+            elif isinstance(x_coerced, CF) or isinstance(r_coerced, CF):
+                result = PowInterval(x_coerced, r_coerced)
+            else:
+                result = PowCF(x_coerced, r_coerced)
+    elif mode is PowMode.INT:
+        result = PowIntExponent(x, r)
+    elif mode is PowMode.CF:
+        result = PowCF(x, r)
+    elif mode is PowMode.MP:
+        result = PowMP(x, r)
+    elif mode is PowMode.INTERVAL:
+        result = PowInterval(x, r)
+    else:
+        raise AssertionError(f"unhandled Pow mode {mode!r}")
+    return _annotate_cf(result, ("Pow", x, r))

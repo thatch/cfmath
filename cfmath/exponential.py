@@ -5,44 +5,44 @@ from __future__ import annotations
 from fractions import Fraction
 from typing import Callable, Iterator
 
-from ._backend import _HAS_MPMATH, _annotate_cf, _coerce_trig_arg, _lazy_cf
+from ._backend import (
+    _HAS_MPMATH,
+    _annotate_cf,
+    _cf_terms_from_interval_approximator,
+    _coerce_trig_arg,
+    _lazy_cf,
+)
 from .constants import E
 from .core import CF
 from .gosper import _GIMME_MIN_TERM_DIGITS
 
 
 def _exp_terms_from_decimal(x_num: int, x_den: int, n_terms: int) -> list[int]:
-    """Compute n_terms CF terms of exp(x_num/x_den) using high-precision Decimal.
+    """Compute n_terms CF terms of exp(x_num/x_den) using rational intervals."""
+    x = Fraction(x_num, x_den)
 
-    Uses the Taylor series exp(x) = Σ xⁿ/n!  No external library required.
-    """
-    import decimal
-
-    prec = n_terms * 5 + 80
-    ctx = decimal.Context(prec=prec, rounding=decimal.ROUND_FLOOR)
-    with decimal.localcontext(ctx):
-        x = decimal.Decimal(x_num) / decimal.Decimal(x_den)
-        term = decimal.Decimal(1)
-        val = decimal.Decimal(1)
-        k = 1
-        eps = decimal.Decimal(10) ** (-(prec - 10))
-        while True:
-            term *= x / decimal.Decimal(k)
+    def _positive_interval(y: Fraction, precision: int) -> tuple[Fraction, Fraction]:
+        k_limit = max(precision, 2 * y.numerator // y.denominator + 4)
+        term = Fraction(1)
+        val = Fraction(1)
+        for k in range(1, k_limit + 1):
+            term *= y / k
             val += term
-            if abs(term) < eps:
-                break
-            k += 1
 
-        terms: list[int] = []
-        for _ in range(n_terms):
-            a = int(val.to_integral_value(rounding=decimal.ROUND_FLOOR))
-            terms.append(a)
-            frac = val - a
-            if frac <= eps:
-                break
-            val = decimal.Decimal(1) / frac
+        next_term = term * y / (k_limit + 1)
+        ratio = y / (k_limit + 2)
+        if ratio >= 1:
+            return _positive_interval(y, precision * 2)
+        tail = next_term / (1 - ratio)
+        return val, val + tail
 
-    return terms
+    def _interval(precision: int) -> tuple[Fraction, Fraction]:
+        if x >= 0:
+            return _positive_interval(x, precision)
+        lo, hi = _positive_interval(-x, precision)
+        return Fraction(1, hi), Fraction(1, lo)
+
+    return _cf_terms_from_interval_approximator(_interval, n_terms)
 
 
 def _exp_terms_from_mpmath(x_num: int, x_den: int, n_terms: int) -> list[int]:
@@ -112,10 +112,12 @@ def ExpCF(
         raise TypeError("Unable to coerce x to CF")
     x = x_coerced
 
+    # if x0 == 0 and len(head.terms) == 1:
     if x == CF.from_int(0):
-        # I can do this one in my head.
+        # Exact zero is the only exponent we can finish before the meta-CF path.
         return _annotate_cf(CF.from_int(1), ("Exp", x))
 
+    # x0 = head.terms[0]
     x0 = x.take(1).terms[0]
     if x0 != 0:
         # Handle integer part of x separately.
@@ -188,6 +190,8 @@ def ExpMP(x: int | Fraction | CF) -> CF:
         x = x.to_fraction()
 
     if isinstance(x, CF):
+        if x.is_finite():
+            return ExpMP(x.to_fraction())
         x_cf = x
 
         def _compute(n_terms: int) -> list[int]:

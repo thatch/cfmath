@@ -2,10 +2,17 @@
 
 from __future__ import annotations
 
+from fractions import Fraction
 from functools import lru_cache
 from typing import Any, Iterator
 
-from ._backend import _HAS_MPMATH, _annotate_cf, _lazy_cf, _mpmath_cf
+from ._backend import (
+    _HAS_MPMATH,
+    _annotate_cf,
+    _cf_terms_from_interval_approximator,
+    _lazy_cf,
+    _mpmath_cf,
+)
 from .core import CF
 
 # ---------------------------------------------------------------------------
@@ -156,7 +163,7 @@ def Catalan() -> CF:
 
 
 def _apery_terms_from_decimal(n_terms: int) -> list[int]:
-    """Compute n_terms CF terms of Apéry's constant ζ(3) without external libraries.
+    """Compute n_terms CF terms of Apéry's constant ζ(3) using rational intervals.
 
     Uses Apéry's own alternating series:
         ζ(3) = (5/2) · Σ_{k=1}^∞ (-1)^{k-1} / (k³ · C(2k, k))
@@ -164,39 +171,24 @@ def _apery_terms_from_decimal(n_terms: int) -> list[int]:
     C(2k, k) grows like 4^k/√(πk), so consecutive terms have ratio → 1/4, giving
     ~1.66 terms per decimal digit.
     """
-    import decimal
 
-    prec = n_terms * 4 + 50
-    ctx = decimal.Context(prec=prec, rounding=decimal.ROUND_FLOOR)
-    with decimal.localcontext(ctx):
-        eps = decimal.Decimal(10) ** (-(prec - 10))
-
-        N = 2 * prec + 20
-
-        val = decimal.Decimal(0)
-        binom = decimal.Decimal(2)  # C(2, 1)
+    def _interval(precision: int) -> tuple[Fraction, Fraction]:
+        total = Fraction(0)
+        binom = 2  # C(2, 1)
         sign = 1
-        for k in range(1, N + 1):
-            dk = decimal.Decimal(k)
-            term = decimal.Decimal(sign) / (dk**3 * binom)
-            val += term
-            if abs(term) < eps:
-                break
+        next_abs = Fraction(0)
+        for k in range(1, precision + 1):
+            total += sign * Fraction(1, k**3 * binom)
             sign = -sign
-            binom = binom * decimal.Decimal(2 * (2 * k + 1)) / decimal.Decimal(k + 1)
+            binom = binom * 2 * (2 * k + 1) // (k + 1)
+        k = precision + 1
+        next_abs = Fraction(1, k**3 * binom)
 
-        val = val * decimal.Decimal(5) / decimal.Decimal(2)
+        scaled = total * Fraction(5, 2)
+        err = next_abs * Fraction(5, 2)
+        return scaled - err, scaled + err
 
-        terms: list[int] = []
-        for _ in range(n_terms):
-            a = int(val.to_integral_value(rounding=decimal.ROUND_FLOOR))
-            terms.append(a)
-            frac = val - a
-            if frac <= eps:
-                break
-            val = decimal.Decimal(1) / frac
-
-    return terms
+    return _cf_terms_from_interval_approximator(_interval, n_terms)
 
 
 @lru_cache(maxsize=None)
