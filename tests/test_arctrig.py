@@ -7,14 +7,14 @@ import pytest
 
 from cfmath import Arccos, Arcsin, Arctan, convergent
 from cfmath.arctrig import (
-    ArctanCF,
-    ArctanGCF,
-    ArctanMP,
     ArctrigMode,
     _arccos_terms_mpmath,
     _arcsin_terms_mpmath,
     _arctan_terms_mpmath,
 )
+from cfmath.arctrig import _ArctanCF as ArctanCF
+from cfmath.arctrig import _ArctanGCF as ArctanGCF
+from cfmath.arctrig import _ArctanMP as ArctanMP
 
 
 class TestArctan:

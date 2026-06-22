@@ -13,7 +13,10 @@ pytest.importorskip("pytest_benchmark")
 
 from cfmath import Pi
 from cfmath.archyperbolic import Arccosh, Arcsinh, Arctanh
-from cfmath.arctrig import Arccos, Arcsin, Arctan, ArctanCF, ArctanGCF, ArctanMP
+from cfmath.arctrig import Arccos, Arcsin, Arctan
+from cfmath.arctrig import _ArctanCF as ArctanCF
+from cfmath.arctrig import _ArctanGCF as ArctanGCF
+from cfmath.arctrig import _ArctanMP as ArctanMP
 from cfmath.hyperbolic import Cosh, Sinh, Tanh
 from cfmath.quadratic import Sqrt
 from cfmath.trig import (
